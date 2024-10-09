@@ -22,107 +22,110 @@ import torch
 import torchvision
 import supervision as sv
 
-from conceptgraph.dataset.datasets_common import GradSLAMDataset, as_intrinsics_matrix
-
-from conceptgraph.utils.model_utils import compute_clip_features
-import torch.nn.functional as F
-
-from gradslam.datasets import datautils
-from conceptgraph.slam.utils import gobs_to_detection_list
-from conceptgraph.slam.cfslam_pipeline_batch import BG_CLASSES
-
-# Local application/library specific imports
-from conceptgraph.dataset.datasets_common import get_dataset
-from conceptgraph.utils.vis import OnlineObjectRenderer, vis_result_fast, vis_result_slow_caption
-from conceptgraph.utils.ious import (
-    compute_2d_box_contained_batch
-)
-from conceptgraph.utils.general_utils import to_tensor
-
-from conceptgraph.slam.slam_classes import MapObjectList, DetectionList
-from conceptgraph.slam.utils import (
-    create_or_load_colors,
-    merge_obj2_into_obj1, 
-    denoise_objects,
-    filter_objects,
-    merge_objects, 
-    gobs_to_detection_list,
-    get_classes_colors
-)
-from conceptgraph.slam.mapping import (
-    compute_spatial_similarities,
-    compute_visual_similarities,
-    aggregate_similarities,
-    merge_detections_to_objects
-)
-
-import gc
-import open3d
-
-from scipy.sparse import csr_matrix
-from scipy.sparse.csgraph import connected_components, minimum_spanning_tree
-
-from habitat.core.vector_env import VectorEnv
-
-from conceptgraph.dataset.datasets_common import load_dataset_config
-
-try: 
-    from groundingdino.util.inference import Model
-    from segment_anything import sam_model_registry, SamPredictor, SamAutomaticMaskGenerator
-except ImportError as e:
-    print("Import Error: Please install Grounded Segment Anything following the instructions in README.")
-    raise e
-
-# Set up some path used in this script
-# Assuming all checkpoint files are downloaded as instructed by the original GSA repo
-if "GSA_PATH" in os.environ:
-    GSA_PATH = os.environ["GSA_PATH"]
-else:
-    raise ValueError("Please set the GSA_PATH environment variable to the path of the GSA repo. ")
-    
-import sys
-if "TAG2TEXT_PATH" in os.environ:
-    TAG2TEXT_PATH = os.environ["TAG2TEXT_PATH"]
-    
-EFFICIENTSAM_PATH = os.path.join(GSA_PATH, "EfficientSAM")
-sys.path.append(GSA_PATH) # This is needed for the following imports in this file
-sys.path.append(TAG2TEXT_PATH) # This is needed for some imports in the Tag2Text files
-sys.path.append(EFFICIENTSAM_PATH)
-
-import torchvision.transforms as TS
 try:
-    from ram.models import ram
-    from ram.models import tag2text
-    from ram import inference_tag2text, inference_ram
-except ImportError as e:
-    print("RAM sub-package not found. Please check your GSA_PATH. ")
-    raise e
+    from conceptgraph.dataset.datasets_common import GradSLAMDataset, as_intrinsics_matrix
 
-# Disable torch gradient computation
-# torch.set_grad_enabled(False)
-# Don't set it in global, just set it in the function that needs it.
-# Using with torch.set_grad_enabled(False): is better.
-# Or using with torch.no_grad(): is also good.
-    
-# GroundingDINO config and checkpoint
-GROUNDING_DINO_CONFIG_PATH = os.path.join(GSA_PATH, "GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py")
-GROUNDING_DINO_CHECKPOINT_PATH = os.path.join(GSA_PATH, "./groundingdino_swint_ogc.pth")
+    from conceptgraph.utils.model_utils import compute_clip_features
+    import torch.nn.functional as F
 
-# Segment-Anything checkpoint
-SAM_ENCODER_VERSION = "vit_h"
-SAM_CHECKPOINT_PATH = os.path.join(GSA_PATH, "./sam_vit_h_4b8939.pth")
+    from gradslam.datasets import datautils
+    from conceptgraph.slam.utils import gobs_to_detection_list
+    from conceptgraph.slam.cfslam_pipeline_batch import BG_CLASSES
 
-# Tag2Text checkpoint
-TAG2TEXT_CHECKPOINT_PATH = os.path.join(TAG2TEXT_PATH, "./tag2text_swin_14m.pth")
-RAM_CHECKPOINT_PATH = os.path.join(TAG2TEXT_PATH, "./ram_swin_large_14m.pth")
+    # Local application/library specific imports
+    from conceptgraph.dataset.datasets_common import get_dataset
+    from conceptgraph.utils.vis import OnlineObjectRenderer, vis_result_fast, vis_result_slow_caption
+    from conceptgraph.utils.ious import (
+        compute_2d_box_contained_batch
+    )
+    from conceptgraph.utils.general_utils import to_tensor
 
-FOREGROUND_GENERIC_CLASSES = [
-    "item", "furniture", "object", "electronics", "wall decoration", "door"
-]
+    from conceptgraph.slam.slam_classes import MapObjectList, DetectionList
+    from conceptgraph.slam.utils import (
+        create_or_load_colors,
+        merge_obj2_into_obj1, 
+        denoise_objects,
+        filter_objects,
+        merge_objects, 
+        gobs_to_detection_list,
+        get_classes_colors
+    )
+    from conceptgraph.slam.mapping import (
+        compute_spatial_similarities,
+        compute_visual_similarities,
+        aggregate_similarities,
+        merge_detections_to_objects
+    )
 
-FOREGROUND_MINIMAL_CLASSES = [
-    "item"
-]
+    import gc
+    import open3d
+
+    from scipy.sparse import csr_matrix
+    from scipy.sparse.csgraph import connected_components, minimum_spanning_tree
+
+    from habitat.core.vector_env import VectorEnv
+
+    from conceptgraph.dataset.datasets_common import load_dataset_config
+
+    try: 
+        from groundingdino.util.inference import Model
+        from segment_anything import sam_model_registry, SamPredictor, SamAutomaticMaskGenerator
+    except ImportError as e:
+        print("Import Error: Please install Grounded Segment Anything following the instructions in README.")
+        raise e
+
+    # Set up some path used in this script
+    # Assuming all checkpoint files are downloaded as instructed by the original GSA repo
+    if "GSA_PATH" in os.environ:
+        GSA_PATH = os.environ["GSA_PATH"]
+    else:
+        raise ValueError("Please set the GSA_PATH environment variable to the path of the GSA repo. ")
+        
+    import sys
+    if "TAG2TEXT_PATH" in os.environ:
+        TAG2TEXT_PATH = os.environ["TAG2TEXT_PATH"]
+        
+    EFFICIENTSAM_PATH = os.path.join(GSA_PATH, "EfficientSAM")
+    sys.path.append(GSA_PATH) # This is needed for the following imports in this file
+    sys.path.append(TAG2TEXT_PATH) # This is needed for some imports in the Tag2Text files
+    sys.path.append(EFFICIENTSAM_PATH)
+
+    import torchvision.transforms as TS
+    try:
+        from ram.models import ram
+        from ram.models import tag2text
+        from ram import inference_tag2text, inference_ram
+    except ImportError as e:
+        print("RAM sub-package not found. Please check your GSA_PATH. ")
+        raise e
+
+    # Disable torch gradient computation
+    # torch.set_grad_enabled(False)
+    # Don't set it in global, just set it in the function that needs it.
+    # Using with torch.set_grad_enabled(False): is better.
+    # Or using with torch.no_grad(): is also good.
+        
+    # GroundingDINO config and checkpoint
+    GROUNDING_DINO_CONFIG_PATH = os.path.join(GSA_PATH, "GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py")
+    GROUNDING_DINO_CHECKPOINT_PATH = os.path.join(GSA_PATH, "./groundingdino_swint_ogc.pth")
+
+    # Segment-Anything checkpoint
+    SAM_ENCODER_VERSION = "vit_h"
+    SAM_CHECKPOINT_PATH = os.path.join(GSA_PATH, "./sam_vit_h_4b8939.pth")
+
+    # Tag2Text checkpoint
+    TAG2TEXT_CHECKPOINT_PATH = os.path.join(TAG2TEXT_PATH, "./tag2text_swin_14m.pth")
+    RAM_CHECKPOINT_PATH = os.path.join(TAG2TEXT_PATH, "./ram_swin_large_14m.pth")
+
+    FOREGROUND_GENERIC_CLASSES = [
+        "item", "furniture", "object", "electronics", "wall decoration", "door"
+    ]
+
+    FOREGROUND_MINIMAL_CLASSES = [
+        "item"
+    ]
+except:
+    Warning("The conceptgraph is not installed. The conceptgraph related functions will not work.")
 
 def time_logger(func):
     import time
@@ -157,7 +160,7 @@ class ObjEdgeProcessor():
         exclude_scans_file_name="eval_scans.txt",
         obj_feature_name="clip",
         obj_pose_name="bbox_np",
-        allobjs_list=[],
+        allobjs_dict={},
         alledges_dict={},
         allvps_pos_dict={}
         ):
@@ -176,7 +179,7 @@ class ObjEdgeProcessor():
         self.obj_feature_name = obj_feature_name
         self.obj_pose_name = obj_pose_name
         
-        self.allobjs_list_list = allobjs_list # a dict of dict, scan dict.  usage: allobjs[scan]
+        self.allobjs_dict_list = allobjs_dict # a dict of dict, scan dict.  usage: allobjs[scan]
         
         # edges
         self.edges_hdf5_save_dir = edges_hdf5_save_dir
@@ -197,7 +200,7 @@ class ObjEdgeProcessor():
         self.load_allobjs_from_hdf5()
         self.get_edges_from_hdf5()
         self.load_allvps_pos_from_connectivity_json()
-        return self.allobjs_list, self.alledges_dict, self.allvps_pos_dict
+        return self.allobjs_dict, self.alledges_dict, self.allvps_pos_dict
     
     def match_obj_edge(self, filtered_objs, all_objs, all_edges):
         
@@ -237,14 +240,14 @@ class ObjEdgeProcessor():
  
     def merge_feature(self, scan, path, valname_feature="clip", valname_pose="bbox_np", online_flag=False):
         
-        if self.allobjs_list == []:
+        if self.allobjs_dict == {}:
             self.load_allobjs_from_hdf5()
             Warning("Loading objs from hdf5 file can be very slow! Shouldn't be used in the mergeing process.")
-            all_objects = self.allobjs_list[scan]
+            all_objects = self.allobjs_dict[scan]
         elif online_flag == True:
             all_objects = scan # cause in this case, the scan is the all_objects.
         else:
-            all_objects = self.allobjs_list[scan]
+            all_objects = self.allobjs_dict[scan]
         
         filtered_objs = []
         objs_feature = []
@@ -287,7 +290,7 @@ class ObjEdgeProcessor():
         
         edges_objs, edges_relationship = self.get_edges_from_dict(edges_dict, scan)
 
-        correspondence_dict = self.find_correspondece_similarity_bboxcenter(edges_objs, objs_pose)
+        correspondence_dict = self.find_correspondece_similarity_bboxcenter_np(edges_objs, objs_pose)
         
         ## M2G 
         ##### correspondence_dict is the vanila form for dict.
@@ -402,7 +405,7 @@ class ObjEdgeProcessor():
                     bbox_np = obj_group["bbox_np"][()]
                     obj_data = {"observed_info": observed_info, "bbox_np": bbox_np}
                     save_objs[scan].append(obj_data)
-        self.allobjs_list = save_objs
+        self.allobjs_dict = save_objs
         return save_objs 
     
     def get_edges_from_hdf5(self):
