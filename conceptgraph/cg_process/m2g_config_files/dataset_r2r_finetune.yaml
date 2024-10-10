@@ -7,3 +7,5 @@ camera_params:
   cx: 112
   cy: 112 
   png_depth_scale: 1 #for depth image in png format 0~10 is ok.
+
+  # 50 is to away

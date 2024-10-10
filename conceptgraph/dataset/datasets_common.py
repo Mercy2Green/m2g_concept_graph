@@ -366,7 +366,7 @@ class R2RDataset(GradSLAMDataset):
         load_embeddings: Optional[bool] = False,
         embedding_dir: Optional[str] = "embeddings",
         embedding_dim: Optional[int] = 512,
-        relative_pose: Optional[bool] = True,
+        relative_pose: Optional[bool] = False,
         **kwargs,
     ):
         self.input_folder = os.path.join(basedir, sequence)

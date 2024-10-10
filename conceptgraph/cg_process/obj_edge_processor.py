@@ -5,6 +5,7 @@ import h5py
 import json
 from os import path
 from numpy import save
+import quaternion
 from requests import get
 from omegaconf import OmegaConf, DictConfig
 from typing import Dict, Any, List
@@ -23,7 +24,12 @@ import torchvision
 import supervision as sv
 
 try:
-    from conceptgraph.dataset.datasets_common import GradSLAMDataset, as_intrinsics_matrix
+    
+    import quaternion
+    import trimesh
+    from scipy.spatial.transform import Rotation as R
+    
+    from conceptgraph.dataset.datasets_common import GradSLAMDataset, as_intrinsics_matrix, R2RDataset
 
     from conceptgraph.utils.model_utils import compute_clip_features
     import torch.nn.functional as F
@@ -1098,10 +1104,10 @@ class ConfigDict():
 
     def __init__(
         self,
-        dataset_config: str = "/home/lg1/lujia/VLN_HGT/vlnce_baselines/m2g_config_files/dataset_r2r_finetune.yaml",
-        detection_config: str = "/home/lg1/lujia/VLN_HGT/vlnce_baselines/m2g_config_files/detection_r2r_finetune.yaml",
-        merge_config: str = "/home/lg1/lujia/VLN_HGT/vlnce_baselines/m2g_config_files/merge_r2r_finetune.yaml",
-        edge_config: str = "/home/lg1/lujia/VLN_HGT/vlnce_baselines/m2g_config_files/edge_r2r_finetune.yaml",
+        dataset_config: str = "/home/lg1/lujia/VLN_HGT/m2g_concept_graph/conceptgraph/cg_process/m2g_config_files/dataset_r2r_finetune.yaml",
+        detection_config: str = "/home/lg1/lujia/VLN_HGT/m2g_concept_graph/conceptgraph/cg_process/m2g_config_files/detection_r2r_finetune.yaml",
+        merge_config: str = "/home/lg1/lujia/VLN_HGT/m2g_concept_graph/conceptgraph/cg_process/m2g_config_files/merge_r2r_finetune.yaml",
+        edge_config: str = "/home/lg1/lujia/VLN_HGT/m2g_concept_graph/conceptgraph/cg_process/m2g_config_files/edge_r2r_finetune.yaml",
     ):
         
         self.dataset_config = load_dataset_config(dataset_config)
@@ -1185,7 +1191,17 @@ class FeatureMergeDataset(GradSLAMDataset):
          
         self.config_dict = config_dict
         super().__init__(
-            config_dict)        
+            config_dict,
+            stride = None,
+            start = 0,
+            end= -1,
+            desired_height = 224,
+            desired_width = 224,
+            load_embeddings = False,
+            embedding_dir = "embeddings",
+            embedding_dim = 512,
+            relative_pose = False,
+            )
         
         ### Need to judge the
         
@@ -1244,19 +1260,19 @@ class FeatureMergeDataset(GradSLAMDataset):
         
         return color_paths, depth_paths, embeddings_paths
         
-    def calculate_camera_intrinsic(self, HFOV, WIDTH, HEIGHT):
+    def calculate_camera_intrinsic(self, HFOV, WIDTH, HEIGHT, VFOV = 90):
         import math 
         camera_intrinsic = np.array([
             [((1 / np.tan(math.radians(HFOV) / 2.))*WIDTH) / 2, 0., WIDTH/2, 0.],
-            [0., ((1 / np.tan(math.radians(HFOV) / 2.))*HEIGHT) / 2, HEIGHT/2, 0.],
+            [0., ((1 / np.tan(math.radians(VFOV) / 2.))*HEIGHT) / 2, HEIGHT/2, 0.],
             [0., 0., 1, 0],
             [0., 0., 0, 1]])
         
         return camera_intrinsic
     
-    def load_camera_intrinsics(self, HFOV, WIDTH, HEIGHT):
+    def load_camera_intrinsics(self, HFOV, WIDTH, HEIGHT, VFOV = 90):
         
-        camera_intrinsic = self.calculate_camera_intrinsic(HFOV, WIDTH, HEIGHT)
+        camera_intrinsic = self.calculate_camera_intrinsic(HFOV, WIDTH, HEIGHT, VFOV)
         
         camera_intrinsics = []
         
@@ -1265,12 +1281,12 @@ class FeatureMergeDataset(GradSLAMDataset):
             
         return camera_intrinsics
     
-    def calculate_fx_fy_cx_cy(self, HFOV, WIDTH, HEIGHT):
+    def calculate_fx_fy_cx_cy(self, HFOV, WIDTH, HEIGHT, VFOV = 90):
         import math
         
         camera_intrinsic = np.array([
             [((1 / np.tan(math.radians(HFOV) / 2.))*WIDTH) / 2, 0., WIDTH/2, 0.],
-            [0., ((1 / np.tan(math.radians(HFOV) / 2.))*HEIGHT) / 2, HEIGHT/2, 0.],
+            [0., ((1 / np.tan(math.radians(VFOV) / 2.))*HEIGHT) / 2, HEIGHT/2, 0.],
             [0., 0., 1, 0],
             [0., 0., 0, 1]])
         
@@ -1309,12 +1325,44 @@ class FeatureMergeDataset(GradSLAMDataset):
             sensor = self.sensor_state[key]
             pos = sensor.position
             quat = sensor.rotation
-            pose = self.transformation_matrix(pos, quat)
+            
+            # _h = [0,0,0]
+            # _e = [np.pi, 0, 0]
+            # _rotation = (R.from_rotvec(_h).inv() * R.from_quat([quat.x, quat.y, quat.z, quat.w]) * R.from_rotvec(_e)).as_quat()
+            # # _rotation to type of quaternion
+            # quat = quaternion.as_quat_array(_rotation)
+            
+            pose_hc = self.transformation_matrix(pos, quat)
+            # T_HC = combine_pose(pos, quat)
+            pose = Thc_to_Twc(pose_hc)
+            # pose = T_HC
+                
+            
             poses.append(torch.tensor(pose))
         # The poses has the same length with the self.image_dict.
         # They are corresponding to each other.
 
         return poses
+    
+    def preprocess_depth_tensor(self, depth):
+        # depth - (B, H, W, 1) torch Tensor
+        
+        depth = depth.unsqueeze(0)
+
+        min_depth = 0.  # !!!!!!!!!!! This is the setting for R2R
+        max_depth = 10. # !!!!!!!!!!! This is the setting for R2R
+
+        # Column-wise post-processing
+        depth = depth * 1.0
+        H = depth.shape[1]
+        depth_max, _ = depth.max(dim=1, keepdim=True)  # (B, H, W, 1)
+        depth_max = depth_max.expand(-1, H, -1, -1)
+        depth[depth == 0] = depth_max[depth == 0]
+
+        depth = min_depth * 100.0 + depth * (max_depth - min_depth) * 100.0
+        depth = depth / 100.
+        
+        return depth.squeeze(0)
     
     def __getitem__(self, index):
         
@@ -1326,8 +1374,11 @@ class FeatureMergeDataset(GradSLAMDataset):
         color = torch.from_numpy(color)
         
         depth = self.image_depth_dict[depth_path]
-        depth = self._preprocess_depth(depth)
+        # _depth = (depth * 255).astype(np.uint8)
+        # depth = self._preprocess_depth(_depth)
         depth = torch.from_numpy(depth)
+        depth = self.preprocess_depth_tensor(depth)    # scale to 0-10
+        
         
         K = as_intrinsics_matrix([self.fx, self.fy, self.cx, self.cy])
         K = torch.from_numpy(K)
@@ -1884,6 +1935,7 @@ class ObjFeatureGenerator():
             # assert image_rgb.max() > 1, "Image is not in range [0, 255]"
             
             # Get the depth image
+            depth_tensor = depth_tensor[16:240, 16:240]
             depth_tensor = depth_tensor[..., 0]
             depth_array = depth_tensor.cpu().numpy()
 
@@ -2255,3 +2307,49 @@ class ObjFeatureGeneratorBatch(ObjFeatureGenerator):
                 captions_batch.append(caption)
             
         return classes_batch, text_prompts_batch, captions_batch
+    
+# Splatam
+def habitat_world_transformations():
+    import habitat_sim
+    # Transforms between the habitat frame H (y-up) and the world frame W (z-up).
+    T_wh = np.identity(4)
+
+    # https://stackoverflow.com/questions/1171849/finding-quaternion-representing-the-rotation-from-one-vector-to-another
+    T_wh[0:3, 0:3] = quaternion.as_rotation_matrix(habitat_sim.utils.common.quat_from_two_vectors(
+            habitat_sim.geo.GRAVITY, np.array([0.0, 0.0, -1.0])))
+
+    T_hw = np.linalg.inv(T_wh)
+
+    return T_wh, T_hw
+
+def opencv_to_opengl_camera(transform=None):
+    if transform is None:
+        transform = np.eye(4)
+    return transform @ trimesh.transformations.rotation_matrix(
+        np.deg2rad(180), [1, 0, 0]
+    )
+
+def opengl_to_opencv_camera(transform=None):
+    if transform is None:
+        transform = np.eye(4)
+    return transform @ trimesh.transformations.rotation_matrix(
+        np.deg2rad(-180), [1, 0, 0]
+    )
+
+def Twc_to_Thc(T_wc):  # opencv-camera to world transformation ---> habitat-caemra to habitat world transformation
+    T_wh, T_hw = habitat_world_transformations()
+    T_hc = T_hw @ T_wc @ opengl_to_opencv_camera()
+    return T_hc
+
+
+def Thc_to_Twc(T_hc):  # habitat-caemra to habitat world transformation --->  opencv-camera to world transformation
+    T_wh, T_hw = habitat_world_transformations()
+    T_wc = T_wh @ T_hc @ opencv_to_opengl_camera()
+    return T_wc
+
+
+def combine_pose(t: np.array, q: quaternion.quaternion) -> np.array:
+    T = np.identity(4)
+    T[0:3, 3] = t
+    T[0:3, 0:3] = quaternion.as_rotation_matrix(q)
+    return T

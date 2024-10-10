@@ -8,7 +8,7 @@
 # exp_suffix: withbg_allclasses
 
 dataset_root: /data0/vln_datasets/preprocessed_data/preprocessed_habitiat_R2R
-dataset_config: "/home/lg1/peteryu_workspace/m2g_vln/concept-graphs/conceptgraph/dataset/dataconfigs/R2R/r2r.yaml"
+dataset_config: /home/lg1/lujia/VLN_HGT/m2g_concept_graph/conceptgraph/cg_process/m2g_config_files/dataset_r2r_finetune.yaml
 scene_id: "train_3"
 start: 0
 end: -1
@@ -27,5 +27,5 @@ save_video: false
 device: "cuda"
 use_slow_vis: false
 exp_suffix: "withbg_allclasses"
-save_seg: True
+save_seg: False
 debug_save_path: /data0/vln_datasets/preprocessed_data/debug_finetune_online_cg

@@ -50,7 +50,7 @@ dbscan_eps: 0.1
 dbscan_min_points: 10
 
 # Selection criteria of the fused object point cloud
-obj_min_points: 10
+obj_min_points: 50
 obj_min_detections: 1
 
 # For merge_overlap_objects() function
@@ -65,7 +65,7 @@ filter_interval: -1            # Filter objects that have too few associations o
 merge_interval: -1             # Merge objects based on geometric and semantic similarity
 
 # Output point cloud
-save_pcd: !!bool False
+save_pcd: !!bool True
 save_suffix: overlap_maskconf0.25_simsum_1.2_dbscan.1
 
 # Visualization
