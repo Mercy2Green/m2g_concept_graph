@@ -668,7 +668,7 @@ class ObjEdgeProcessor():
         # with gzip.open(Path(args.cachedir) / "map" / "scene_map_cfslam_pruned.pkl.gz", "wb") as f:
         #     pkl.dump(scene_map.to_serializable(), f)
 
-        print("Computing bounding box overlaps...")
+        # print("Computing bounding box overlaps...")
         bbox_overlaps = compute_overlap_matrix(args, scene_map)
 
         # Construct a weighted adjacency matrix based on similarity scores
@@ -1418,7 +1418,7 @@ class FeatureMergeDataset(GradSLAMDataset):
 class ObjFeatureGenerator():
     def __init__(
         self,
-        generator_device = "cuda:0",
+        generator_device = "cuda",
         # cg_config= "/home/lg1/peteryu_workspace/BEV_HGT_VLN/concept-graphs/conceptgraph/configs/slam_pipeline/base.yaml"
         ):
         
@@ -1442,6 +1442,8 @@ class ObjFeatureGenerator():
         self.global_classes = set()
         
         self.use_bg = False
+        
+        self.device = "cuda"
         
         # Device part
         # The self.device is the original device, while the self.generator_device is the device for the generator

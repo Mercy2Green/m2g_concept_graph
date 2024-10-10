@@ -3,7 +3,7 @@ cachedir: "saved/room0"
 prompts_path: "prompts/gpt_prompts.json"
 mapfile: "saved/room0/map/scene_map_cfslam.pkl.gz"
 class_names_file: "saved/room0/gsa_classes_ram.json"
-device: "cuda:0"
+device: "cuda"
 downsample_voxel_size: 0.025
 max_detections_per_object: 10
 min_views_per_object: 2
