@@ -23,6 +23,8 @@ import torch
 import torchvision
 import supervision as sv
 
+from contextlib import contextmanager
+
 try:
     
     import quaternion
@@ -151,6 +153,18 @@ class TimeLoggerMeta(type):
                 dct[attr] = time_logger(value)
         return super().__new__(cls, name, bases, dct)
 
+@contextmanager
+def mute_print():
+    # Save the current stdout
+    original_stdout = sys.stdout
+    try:
+        # Redirect stdout to devnull
+        sys.stdout = open(os.devnull, 'w')
+        yield
+    finally:
+        # Restore the original stdout
+        sys.stdout.close()
+        sys.stdout = original_stdout
 
 
 # class ObjEdgeProcessor(metaclass=TimeLoggerMeta):
@@ -1498,29 +1512,31 @@ class ObjFeatureGenerator():
                     device = _device
                 )
                 
-                _detections = self.detection_inference(
-                    cfg=self.detection_config,
-                    image_rgb = _image_rgb, 
-                    classes = _classes, 
-                    sam_variant = self.detection_config.sam_variant, 
-                    mask_generator = self.mask_generator,
-                    grounding_dino_model = self.grounding_dino_model,
-                    device = _device
-                )
+                with mute_print():
                 
-                _image_crops, _image_feats, _text_feats = self.segementation_inference(
-                    cfg=self.detection_config,
-                    image_rgb = _image_rgb,
-                    detections = _detections,
-                    text_prompt = _text_prompt,
-                    caption = _caption,
-                    sam_predictor = self.sam_predictor,
-                    clip_model = self.clip_model,
-                    clip_preprocess = self.clip_preprocess,
-                    clip_tokenizer = self.clip_tokenizer,
-                    classes = _classes,
-                    device = _device
-                )
+                    _detections = self.detection_inference(
+                        cfg=self.detection_config,
+                        image_rgb = _image_rgb, 
+                        classes = _classes, 
+                        sam_variant = self.detection_config.sam_variant, 
+                        mask_generator = self.mask_generator,
+                        grounding_dino_model = self.grounding_dino_model,
+                        device = _device
+                    )
+                    
+                    _image_crops, _image_feats, _text_feats = self.segementation_inference(
+                        cfg=self.detection_config,
+                        image_rgb = _image_rgb,
+                        detections = _detections,
+                        text_prompt = _text_prompt,
+                        caption = _caption,
+                        sam_predictor = self.sam_predictor,
+                        clip_model = self.clip_model,
+                        clip_preprocess = self.clip_preprocess,
+                        clip_tokenizer = self.clip_tokenizer,
+                        classes = _classes,
+                        device = _device
+                    )
 
                 # Convert the detections to a dict. The elements are in np.array
                 detections = {
@@ -2134,8 +2150,10 @@ class ObjFeatureGenerator():
         #         pickle.dump(results, f)
         #     print(f"Saved full point cloud to {pcd_save_path}")
         
-        objects = filter_objects(cfg, objects)
-        objects = merge_objects(cfg, objects)
+        
+        with mute_print():
+            objects = filter_objects(cfg, objects)
+            objects = merge_objects(cfg, objects)
         
         # Save again the full point cloud after the post-processing
         if cfg.save_pcd:
@@ -2206,6 +2224,7 @@ class ObjFeatureGenerator():
         for obj in objects:
             if isinstance(obj["bbox"], open3d.geometry.AxisAlignedBoundingBox):
                 obj["bbox"] = obj["bbox"].get_oriented_bounding_box()
+                
         return objects, bg_objects
        
     def get_class_colors(self, classes, cfg):
