@@ -1331,6 +1331,33 @@ class FeatureMergeDataset(GradSLAMDataset):
         M = np.dot(T, R)
         return M
     
+    # def load_poses(self):
+        
+    #     poses = []
+        
+    #     for key in self.rgb_keys:
+    #         sensor = self.sensor_state[key]
+    #         pos = sensor.position
+    #         quat = sensor.rotation
+            
+    #         # _h = [0,0,0]
+    #         # _e = [np.pi, 0, 0]
+    #         # _rotation = (R.from_rotvec(_h).inv() * R.from_quat([quat.x, quat.y, quat.z, quat.w]) * R.from_rotvec(_e)).as_quat()
+    #         # # _rotation to type of quaternion
+    #         # quat = quaternion.as_quat_array(_rotation)
+            
+    #         pose_hc = self.transformation_matrix(pos, quat)
+    #         # T_HC = combine_pose(pos, quat)
+    #         pose = Thc_to_Twc(pose_hc)
+    #         # pose = T_HC
+                
+            
+    #         poses.append(torch.tensor(pose))
+    #     # The poses has the same length with the self.image_dict.
+    #     # They are corresponding to each other.
+
+    #     return poses
+    
     def load_poses(self):
         
         poses = []
@@ -1339,19 +1366,7 @@ class FeatureMergeDataset(GradSLAMDataset):
             sensor = self.sensor_state[key]
             pos = sensor.position
             quat = sensor.rotation
-            
-            # _h = [0,0,0]
-            # _e = [np.pi, 0, 0]
-            # _rotation = (R.from_rotvec(_h).inv() * R.from_quat([quat.x, quat.y, quat.z, quat.w]) * R.from_rotvec(_e)).as_quat()
-            # # _rotation to type of quaternion
-            # quat = quaternion.as_quat_array(_rotation)
-            
-            pose_hc = self.transformation_matrix(pos, quat)
-            # T_HC = combine_pose(pos, quat)
-            pose = Thc_to_Twc(pose_hc)
-            # pose = T_HC
-                
-            
+            pose = self.transformation_matrix(pos, quat)
             poses.append(torch.tensor(pose))
         # The poses has the same length with the self.image_dict.
         # They are corresponding to each other.
