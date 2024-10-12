@@ -1118,10 +1118,14 @@ class ConfigDict():
 
     def __init__(
         self,
-        dataset_config: str = "/home/lg1/lujia/VLN_HGT/m2g_concept_graph/conceptgraph/cg_process/m2g_config_files/dataset_r2r_finetune.yaml",
-        detection_config: str = "/home/lg1/lujia/VLN_HGT/m2g_concept_graph/conceptgraph/cg_process/m2g_config_files/detection_r2r_finetune.yaml",
-        merge_config: str = "/home/lg1/lujia/VLN_HGT/m2g_concept_graph/conceptgraph/cg_process/m2g_config_files/merge_r2r_finetune.yaml",
-        edge_config: str = "/home/lg1/lujia/VLN_HGT/m2g_concept_graph/conceptgraph/cg_process/m2g_config_files/edge_r2r_finetune.yaml",
+        dataset_config,
+        detection_config,
+        merge_config,
+        edge_config,
+        # dataset_config: str = "/home/lg1/lujia/VLN_HGT/m2g_concept_graph/conceptgraph/cg_process/m2g_config_files/dataset_r2r_finetune.yaml",
+        # detection_config: str = "/home/lg1/lujia/VLN_HGT/m2g_concept_graph/conceptgraph/cg_process/m2g_config_files/detection_r2r_finetune.yaml",
+        # merge_config: str = "/home/lg1/lujia/VLN_HGT/m2g_concept_graph/conceptgraph/cg_process/m2g_config_files/merge_r2r_finetune.yaml",
+        # edge_config: str = "/home/lg1/lujia/VLN_HGT/m2g_concept_graph/conceptgraph/cg_process/m2g_config_files/edge_r2r_finetune.yaml",
     ):
         
         self.dataset_config = load_dataset_config(dataset_config)
