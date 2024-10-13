@@ -195,7 +195,7 @@ def main(args):
     if viewpoints is not None:
         for vp in viewpoints:
             # Create a coordinate frame at the viewpoint position
-            coord_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=2.0)
+            coord_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1.0)
             # Translate the coordinate frame vertically by 5 meters
             coord_frame.translate(vp)
             vis.add_geometry(coord_frame)

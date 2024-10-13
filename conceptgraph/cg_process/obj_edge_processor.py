@@ -1339,22 +1339,9 @@ class FeatureMergeDataset(GradSLAMDataset):
             sensor = self.sensor_state[key]
             pos = sensor.position
             quat = sensor.rotation
-            
-            # _h = [0,0,0]
-            # _e = [np.pi, 0, 0]
-            # _rotation = (R.from_rotvec(_h).inv() * R.from_quat([quat.x, quat.y, quat.z, quat.w]) * R.from_rotvec(_e)).as_quat()
-            # # _rotation to type of quaternion
-            # quat = quaternion.as_quat_array(_rotation)
-            
             pose_hc = self.transformation_matrix(pos, quat)
-            # T_HC = combine_pose(pos, quat)
             pose = Thc_to_Twc(pose_hc)
-            # pose = T_HC
-                
-            
             poses.append(torch.tensor(pose))
-        # The poses has the same length with the self.image_dict.
-        # They are corresponding to each other.
 
         return poses
     
@@ -2054,7 +2041,7 @@ class ObjFeatureGenerator():
     
         return fg_detections_list, bg_detection_list
     
-    def merge_objs_detections(self, objects, fg_detections_list, bg_detections_list, cfg):
+    def merge_objs_detections(self, objects, fg_detections_list, bg_detections_list, cfg, vp_path_list:list=None):
         
         if not cfg.skip_bg:
             # Handle the background detection separately 
@@ -2135,6 +2122,7 @@ class ObjFeatureGenerator():
                 'cfg': cfg,
                 # 'class_names': classes,
                 'class_colors': class_colors,
+                'viewpoints': vp_path_list,
             }
 
             # pcd_save_path = cfg.dataset_root / \
