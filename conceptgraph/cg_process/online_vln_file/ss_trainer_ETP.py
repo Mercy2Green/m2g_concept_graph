@@ -38,7 +38,7 @@ from vlnce_baselines.common.env_utils import construct_envs, construct_envs_for_
 from vlnce_baselines.common.env_utils import get_places_room_inputs
 from vlnce_baselines.common.utils import extract_instruction_tokens
 from vlnce_baselines.models.graph_utils import GraphMap, MAX_DIST
-from conceptgraph.slam.slam_classes import MapObjectList
+from conceptgraph.slam.slam_classes import DetectionList, MapObjectList
 
 
 from .utils import get_camera_orientations12
@@ -1385,6 +1385,7 @@ class RLTrainer(BaseVLNCETrainer):
         # debug_distance_list = [[] for _ in range(self.envs.num_envs)]
         all_objs_envs = [MapObjectList() for _ in range(self.envs.num_envs)]
         all_edges_envs = [[] for _ in range(self.envs.num_envs)]
+        all_fg_detections_envs = [DetectionList() for _ in range(self.envs.num_envs)]
         # print("self.max_len:", self.max_len)
         id_x = 0
         for stepk in range(self.max_len):
@@ -1488,9 +1489,20 @@ class RLTrainer(BaseVLNCETrainer):
                 # cg_T = Thc_to_Twc(cur_T)
                 # path_vp_position[i].append(np.array([cg_T[0,3], cg_T[1,3], cg_T[2,3]]))
                 ## 
+
+                ### V2
+                _cur_surround_objs = MapObjectList()
+                _cur_surround_objs = self.obj_feature_generator.detections_to_objs(_cur_surround_objs, fg_detections_list, bg_detections_list, self.config_dict.merge_config, path_vp_position[i])
+                all_objs_envs[i] = self.obj_feature_generator.merge_objs_objs(all_objs_envs[i], _cur_surround_objs[i], self.config_dict.merge_config, path_vp_position[i], cur_scan_i)
                 
-                
-                all_objs_envs[i], bg_objects = self.obj_feature_generator.merge_objs_detections(all_objs_envs[i], fg_detections_list, bg_detections_list, self.config_dict.merge_config, path_vp_position[i])
+                ### V1
+                # all_objs_envs[i], bg_objects = self.obj_feature_generator.merge_objs_detections(all_objs_envs[i], fg_detections_list, bg_detections_list, self.config_dict.merge_config, path_vp_position[i])
+
+                ### V3
+                # all_fg_detections_envs[i].extend(fg_detections_list)
+                # _cur_surround_objs = MapObjectList()
+                # _cur_surround_objs = self.obj_feature_generator.merge_objs_detections(_cur_surround_objs, all_fg_detections_envs[i], bg_detections_list, self.config_dict.merge_config, path_vp_position[i])
+                # all_objs_envs[i] = _cur_surround_objs[i]
                 
                 # for o in all_objs_envs[i]:
                 #     print(f"num_detections: {o['num_detections']}")
