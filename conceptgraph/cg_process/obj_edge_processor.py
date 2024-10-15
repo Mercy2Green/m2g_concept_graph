@@ -2065,7 +2065,6 @@ class ObjFeatureGenerator():
         return fg_detections_list, bg_detection_list
     
     def merge_objs_detections(self, objects, fg_detections_list, bg_detections_list, cfg, vp_path_list:list=None):
-        
         if not cfg.skip_bg:
             # Handle the background detection separately 
             # Each class of them are fused into the map as a single object
@@ -2091,7 +2090,7 @@ class ObjFeatureGenerator():
             for i in range(len(fg_detections_list)):
                 fg_detections_list[i]['contain_number'] = [contain_numbers[i]]
             
-        if len(objects) == 0:
+        if len(objects) == 0: # This is the key reason why the first step have the good merge result
             # Add all detections to the map
             for i in range(len(fg_detections_list)):
                 objects.append(fg_detections_list[i])
@@ -2118,6 +2117,14 @@ class ObjFeatureGenerator():
         
         objects = merge_detections_to_objects(cfg, fg_detections_list, objects, agg_sim) # 
         
+        if bg_objects is not None:
+            bg_objects = MapObjectList([_ for _ in bg_objects.values() if _ is not None])
+            bg_objects = denoise_objects(cfg, bg_objects)
+            
+        objects = denoise_objects(cfg, objects)  
+        objects = merge_objects(cfg, objects)
+        objects = filter_objects(cfg, objects)
+            
         # # Perform post-processing periodically if told so
         # if cfg.denoise_interval > 0 and (idx+1) % cfg.denoise_interval == 0:
         #     objects = denoise_objects(cfg, objects)
@@ -2125,20 +2132,6 @@ class ObjFeatureGenerator():
         #     objects = filter_objects(cfg, objects)
         # if cfg.merge_interval > 0 and (idx+1) % cfg.merge_interval == 0:
         #     objects = merge_objects(cfg, objects)
-        
-        if bg_objects is not None:
-            bg_objects = MapObjectList([_ for _ in bg_objects.values() if _ is not None])
-            bg_objects = denoise_objects(cfg, bg_objects)
-            
-        objects = denoise_objects(cfg, objects)  
-        
-        # with mute_print():
-
-        objects = merge_objects(cfg, objects)
-        
-        objects = filter_objects(cfg, objects)
-            
-        
             
         # Save the full point cloud before post-processing
         if cfg.save_pcd:
@@ -2220,7 +2213,7 @@ class ObjFeatureGenerator():
         #     print("Save video to %s" % video_save_path)
         # print(scene_map)
         
-        # The code below is very same with filer objs
+        # The code below is very same with filter objs
         # Just more a oriented_bouding_box convert.
         # pcd_filter_number = cfg.obj_min_points
         # print("Before pcd filtering", len(objects))
@@ -2240,7 +2233,142 @@ class ObjFeatureGenerator():
                 obj["bbox"] = obj["bbox"].get_oriented_bounding_box()
                 
         return objects, bg_objects
-       
+    
+    
+    def detections_to_objs(self,objects, fg_detections_list, bg_detections_list, cfg, vp_path_list:list=None):
+        if not cfg.skip_bg:
+            # Handle the background detection separately 
+            # Each class of them are fused into the map as a single object
+            bg_objects = {
+                c: None for c in BG_CLASSES
+            }
+        else:
+            bg_objects = None
+        
+        if len(bg_detections_list) > 0:
+            for detected_object in bg_detections_list:
+                class_name = detected_object['class_name'][0]
+                if bg_objects[class_name] is None:
+                    bg_objects[class_name] = detected_object
+                else:
+                    matched_obj = bg_objects[class_name]
+                    matched_det = detected_object
+                    bg_objects[class_name] = merge_obj2_into_obj1(cfg, matched_obj, matched_det, run_dbscan=False)
+
+        if cfg.use_contain_number:
+            xyxy = fg_detections_list.get_stacked_values_torch('xyxy', 0)
+            contain_numbers = compute_2d_box_contained_batch(xyxy, cfg.contain_area_thresh)
+            for i in range(len(fg_detections_list)):
+                fg_detections_list[i]['contain_number'] = [contain_numbers[i]]
+            
+        if len(objects) == 0: # This is the key reason why the first step have the good merge result
+            # Add all detections to the map
+            for i in range(len(fg_detections_list)):
+                objects.append(fg_detections_list[i])
+                
+        spatial_sim = compute_spatial_similarities(cfg, fg_detections_list, objects)
+        visual_sim = compute_visual_similarities(cfg, fg_detections_list, objects)
+        agg_sim = aggregate_similarities(cfg, spatial_sim, visual_sim)
+        
+        # Compute the contain numbers for each detection
+        if cfg.use_contain_number:
+            # Get the contain numbers for all objects
+            contain_numbers_objects = torch.Tensor([obj['contain_number'][0] for obj in objects])
+            detection_contained = contain_numbers > 0 # (M,)
+            object_contained = contain_numbers_objects > 0 # (N,)
+            detection_contained = detection_contained.unsqueeze(1) # (M, 1)
+            object_contained = object_contained.unsqueeze(0) # (1, N)                
+
+            # Get the non-matching entries, penalize their similarities
+            xor = detection_contained ^ object_contained
+            agg_sim[xor] = agg_sim[xor] - cfg.contain_mismatch_penalty
+        
+        # Threshold sims according to cfg. Set to negative infinity if below threshold
+        agg_sim[agg_sim < cfg.sim_threshold] = float('-inf')
+        
+        objects = merge_detections_to_objects(cfg, fg_detections_list, objects, agg_sim) # 
+        
+        if bg_objects is not None:
+            bg_objects = MapObjectList([_ for _ in bg_objects.values() if _ is not None])
+            bg_objects = denoise_objects(cfg, bg_objects)
+            
+        # objects = denoise_objects(cfg, objects)  
+        # objects = merge_objects(cfg, objects)
+        # objects = filter_objects(cfg, objects)
+        
+        # # Save the full point cloud before post-processing
+        # if cfg.save_pcd:
+        #     # ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            
+        #     class_colors = distinctipy.get_colors(len(objects), pastel_factor=0.5)
+        #     class_colors = {str(i): c for i, c in enumerate(class_colors)}
+            
+        #     results = {
+        #         'objects': objects.to_serializable(),
+        #         'bg_objects': None if bg_objects is None else bg_objects.to_serializable(),
+        #         'cfg': cfg,
+        #         # 'class_names': classes,
+        #         'class_colors': class_colors,
+        #         'viewpoints': vp_path_list,
+        #     }
+            
+        #     # pcd_save_path = cfg.debug_save_path +'/'+ 'pcd_saves' +'/'+ f"full_pcd_{cfg.gsa_variant}_{cfg.save_suffix}_step{self.step}.pkl.gz"
+        #     pcd_save_path = cfg.debug_save_path +'/'+ 'pcd_saves' +'/'+ f"full_pcd_step{self.step}.pkl.gz"
+
+        #     results['objects'] = objects.to_serializable()
+        #     pcd_save_path = pcd_save_path[:-7] + "_post.pkl.gz"
+        #     with gzip.open(pcd_save_path, "wb") as f:
+        #         pickle.dump(results, f)
+        #     print(f"Saved full point cloud after post-processing to {pcd_save_path}")
+            
+        for obj in objects:
+            if isinstance(obj["bbox"], open3d.geometry.AxisAlignedBoundingBox):
+                obj["bbox"] = obj["bbox"].get_oriented_bounding_box()
+                
+        return objects, bg_objects
+    
+
+    
+    def merge_objs_objs(self, objects:MapObjectList, new_objs:MapObjectList, cfg, vp_path_list:list=None, cur_scan=None):    
+            
+        objects.extend(new_objs)
+        
+        # objects = denoise_objects(cfg, objects)  
+        objects = merge_objects(cfg, objects)
+        if len(objects) > cfg.obj_min_num:
+            objects = filter_objects(cfg, objects)
+
+        # Save the full point cloud before post-processing
+        if cfg.save_pcd:
+            # ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            
+            class_colors = distinctipy.get_colors(len(objects), pastel_factor=0.5)
+            class_colors = {str(i): c for i, c in enumerate(class_colors)}
+            
+            results = {
+                'objects': objects.to_serializable(),
+                'bg_objects': None,
+                'cfg': cfg,
+                # 'class_names': classes,
+                'class_colors': class_colors,
+                'viewpoints': vp_path_list,
+            }
+            # pcd_save_path = cfg.debug_save_path +'/'+ 'pcd_saves' +'/'+ f"full_pcd_{cfg.gsa_variant}_{cfg.save_suffix}_step{self.step}.pkl.gz"
+            # pcd_save_path = cfg.debug_save_path +'/'+ 'pcd_saves' +'/'+ f"full_objs_step{self.step}_{cur_scan}.pkl.gz"
+            pcd_save_path = cfg.debug_save_path +'/'+ 'pcd_saves' +'/'+ f"full_objs_step{self.step}.pkl.gz"
+        
+            results['objects'] = objects.to_serializable()
+            pcd_save_path = pcd_save_path[:-7] + "_post.pkl.gz"
+            with gzip.open(pcd_save_path, "wb") as f:
+                pickle.dump(results, f)
+            print(f"Saved full point cloud after post-processing to {pcd_save_path}")
+        
+        for obj in objects:
+            if isinstance(obj["bbox"], open3d.geometry.AxisAlignedBoundingBox):
+                obj["bbox"] = obj["bbox"].get_oriented_bounding_box()
+                
+        return objects
+    
     def get_class_colors(self, classes, cfg):
 
         class_colors = get_classes_colors(classes)
