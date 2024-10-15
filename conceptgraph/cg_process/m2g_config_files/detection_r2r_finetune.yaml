@@ -13,8 +13,8 @@ scene_id: "train_3"
 start: 0
 end: -1
 stride: 1
-desired_height: 480
-desired_width: 640
+desired_height: 224
+desired_width: 224
 box_threshold: 0.2
 text_threshold: 0.2
 nms_threshold: 0.5

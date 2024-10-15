@@ -12,6 +12,7 @@ import msgpack_numpy
 import numpy as np
 import math
 import time
+import quaternion
 import torch
 import torch.nn.functional as F
 from torch.autograd import Variable
@@ -61,7 +62,7 @@ from torch.cuda.amp import autocast, GradScaler
 from vlnce_baselines.common.ops import pad_tensors_wgrad, gen_seq_masks,pad_tensors_2dim
 from torch.nn.utils.rnn import pad_sequence
 
-from conceptgraph.cg_process.obj_edge_processor import ObjEdgeProcessor, FeatureMergeDataset, ConfigDict, ObjFeatureGenerator, time_logger
+from conceptgraph.cg_process.obj_edge_processor import ObjEdgeProcessor, FeatureMergeDataset, ConfigDict, ObjFeatureGenerator, time_logger, combine_pose, Twc_to_Thc, Thc_to_Twc
 from vlnce_baselines.models.graph_utils import heading_from_quaternion
 from vlnce_baselines.models.bev_utils import transfrom3D, bevpos_polar, PointCloud
 
@@ -1379,6 +1380,8 @@ class RLTrainer(BaseVLNCETrainer):
         # path_vp = [[]] * self.envs.num_envs # Don't ever using this to init the path_vp. Each list in the path_vp is the same list. It will be operated together in the loop.
         path_vp = [[] for _ in range(self.envs.num_envs)]
         path_vp_envs = [[] for _ in range(self.envs.num_envs)] 
+        path_vp_position = [[] for _ in range(self.envs.num_envs)]
+        path_vp_T = [[] for _ in range(self.envs.num_envs)]
         # debug_distance_list = [[] for _ in range(self.envs.num_envs)]
         all_objs_envs = [MapObjectList() for _ in range(self.envs.num_envs)]
         all_edges_envs = [[] for _ in range(self.envs.num_envs)]
@@ -1476,7 +1479,18 @@ class RLTrainer(BaseVLNCETrainer):
 
                 self.obj_feature_generator.set_step(stepk)  #For debug save
                 
-                all_objs_envs[i], bg_objects = self.obj_feature_generator.merge_objs_detections(all_objs_envs[i], fg_detections_list, bg_detections_list, self.config_dict.merge_config)
+                #### VP_path visualization
+                # # path_vp_position[i].append(np.array([cur_pos[i][0], cur_pos[i][2], -cur_pos[i][1]]))
+                path_vp_position[i].append(np.array([cur_pos[i][0], -cur_pos[i][2], cur_pos[i][1]]))
+                # # c_x = h_x, c_y = -h_z, c_z = h_y
+                # The other
+                # cur_T = combine_pose(cur_pos[i], quaternion.quaternion(cur_ori[i][0], cur_ori[i][1], cur_ori[i][2], cur_ori[i][3]))
+                # cg_T = Thc_to_Twc(cur_T)
+                # path_vp_position[i].append(np.array([cg_T[0,3], cg_T[1,3], cg_T[2,3]]))
+                ## 
+                
+                
+                all_objs_envs[i], bg_objects = self.obj_feature_generator.merge_objs_detections(all_objs_envs[i], fg_detections_list, bg_detections_list, self.config_dict.merge_config, path_vp_position[i])
                 
                 # for o in all_objs_envs[i]:
                 #     print(f"num_detections: {o['num_detections']}")
@@ -1491,9 +1505,10 @@ class RLTrainer(BaseVLNCETrainer):
                 # else:
                 #     _objs, _objs_feature, _objs_pose, _edges_objects, _edges_relationship = self.obj_edge_processor.get_merge_feature_edges_relationship(cur_scan[i], path_vp[i])
 
+                _h_objs_pose = self.obj_edge_processor.xyz_trans_c_h_batch(_objs_pose)
                 filtered_objs.append(_objs)
                 filtered_objs_feature.append(_objs_feature)
-                filtered_objs_pose.append(_objs_pose)
+                filtered_objs_pose.append(_h_objs_pose)
                 edges_objects_extend.append(_edges_objects)
                 edges_relationship_extend.append(_edges_relationship)
                 

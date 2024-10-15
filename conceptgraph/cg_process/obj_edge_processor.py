@@ -348,7 +348,7 @@ class ObjEdgeProcessor():
         return np.array(edges_objects), np.array(edges_relationship), np.array(edges_objects_extend), np.array(edges_relationship_extend)
     
     
-    def process_obj(self, all_objs, path):
+    def process_obj(self, all_objs, path, pose_to_habitat = False):
         
         # The all_objs is a list of objs, each obj is a dict, the key is the feature name, the value is the feature value.
         # The all_edges is a list of edges, each edge is a list of two obj index and the relationship.
@@ -367,6 +367,11 @@ class ObjEdgeProcessor():
             feature_str,
             bbox_center_str,
             True)
+        
+        if pose_to_habitat:
+            # c_x = h_x, c_y = -h_z, c_z = h_y -> h_x = c_x, h_y = c_z, h_z = -c_y
+            for i in filtered_objs_pose:
+                obj_pose = np.array([obj_pose[0], obj_pose[2], -obj_pose[1]])
         
         return filtered_objs, filtered_objs_feature, filtered_objs_pose
         # return _objs, _objs_feature, _objs_pose, _edges_objects, _edges_relationship 
@@ -904,6 +909,17 @@ class ObjEdgeProcessor():
         Check if bbox1 is bigger than bbox2.
         """
         return bbox1.volume() > bbox2.volume()
+    
+    def xyz_trans_c_h(self, cg_xyz:np.ndarray) -> np.ndarray:
+        # c_x = h_x, c_y = -h_z, c_z = h_y
+        # h_x = c_x, h_y = c_z, h_z = -c_y
+        h_xyz = np.array([cg_xyz[0], cg_xyz[2], -cg_xyz[1]])
+        return h_xyz
+    
+    def xyz_trans_c_h_batch(self, cg_xyzs:list) -> np.ndarray:
+        h_xyzs = np.array([self.xyz_trans_c_h(cg_xyz) for cg_xyz in cg_xyzs])
+        return h_xyzs
+        
 
 # The SAM based on automatic mask generation, without bbox prompting
 def get_sam_segmentation_dense(
@@ -1342,6 +1358,13 @@ class FeatureMergeDataset(GradSLAMDataset):
             pose_hc = self.transformation_matrix(pos, quat)
             pose = Thc_to_Twc(pose_hc)
             poses.append(torch.tensor(pose))
+            
+        # for key in self.rgb_keys:
+        #     sensor = self.sensor_state[key]
+        #     pos = sensor.position
+        #     quat = sensor.rotation
+        #     pose = self.transformation_matrix(pos, quat)
+        #     poses.append(torch.tensor(pose))
 
         return poses
     
@@ -2109,6 +2132,14 @@ class ObjFeatureGenerator():
             
         objects = denoise_objects(cfg, objects)  
         
+        # with mute_print():
+
+        objects = merge_objects(cfg, objects)
+        
+        objects = filter_objects(cfg, objects)
+            
+        
+            
         # Save the full point cloud before post-processing
         if cfg.save_pcd:
             # ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -2137,11 +2168,6 @@ class ObjFeatureGenerator():
         #     with gzip.open(pcd_save_path, "wb") as f:
         #         pickle.dump(results, f)
         #     print(f"Saved full point cloud to {pcd_save_path}")
-        
-        
-        with mute_print():
-            objects = filter_objects(cfg, objects)
-            objects = merge_objects(cfg, objects)
         
         # Save again the full point cloud after the post-processing
         if cfg.save_pcd:
@@ -2362,3 +2388,8 @@ def combine_pose(t: np.array, q: quaternion.quaternion) -> np.array:
     T[0:3, 3] = t
     T[0:3, 0:3] = quaternion.as_rotation_matrix(q)
     return T
+
+ ### The correct
+    # cur_T = combine_pose(cur_pos[i], quaternion.quaternion(cur_ori[i][0], cur_ori[i][1], cur_ori[i][2], cur_ori[i][3]))
+    # cg_T = Thc_to_Twc(cur_T)
+    # path_vp_position[i].append(np.array([cg_T[0,3], cg_T[1,3], cg_T[2,3]]))

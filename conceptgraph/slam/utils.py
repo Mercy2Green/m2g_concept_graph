@@ -222,6 +222,8 @@ def merge_obj2_into_obj1(cfg, obj1, obj2, run_dbscan=True):
                        n_obj1_det + n_obj2_det)
     obj1['text_ft'] = F.normalize(obj1['text_ft'], dim=0)
     
+    obj1['num_detections'] += obj2['num_detections']
+    
     return obj1
 
 def compute_overlap_matrix(cfg, objects: MapObjectList):
