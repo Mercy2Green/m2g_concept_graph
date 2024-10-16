@@ -66,7 +66,7 @@ filter_interval: -1            # Filter objects that have too few associations o
 merge_interval: -1             # Merge objects based on geometric and semantic similarity
 
 # Output point cloud
-save_pcd: !!bool True
+save_pcd: !!bool False
 save_suffix: overlap_maskconf0.25_simsum_1.2_dbscan.1
 
 # Visualization

@@ -16,7 +16,7 @@ EVAL_CKPT_PATH_DIR: /data2/vln_dataset/checkpoints/acc78_m2g/
 
 # RESULTS_DIR: data/eval_result/etp_org_weight/
 
-RESULTS_DIR: /data2/vln_dataset/checkpoints/eval_result/m2g_debug/
+RESULTS_DIR: /data2/vln_dataset/checkpoints/infer/m2g_debug/
 
 
 # VIDEO_DIR: data/logs/video1/

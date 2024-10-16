@@ -200,6 +200,7 @@ class ObjEdgeProcessor():
         self.obj_pose_name = obj_pose_name
         
         self.allobjs_dict_list = allobjs_dict # a dict of dict, scan dict.  usage: allobjs[scan]
+        self.allobjs_dict = {}
         
         # edges
         self.edges_hdf5_save_dir = edges_hdf5_save_dir
@@ -260,12 +261,12 @@ class ObjEdgeProcessor():
  
     def merge_feature(self, scan, path, valname_feature="clip", valname_pose="bbox_np", online_flag=False):
         
-        if self.allobjs_dict == {}:
+        if online_flag == True:
+            all_objects = scan # cause in this case, the scan is the all_objects.
+        elif self.allobjs_dict == {}:
             self.load_allobjs_from_hdf5()
             Warning("Loading objs from hdf5 file can be very slow! Shouldn't be used in the mergeing process.")
             all_objects = self.allobjs_dict[scan]
-        elif online_flag == True:
-            all_objects = scan # cause in this case, the scan is the all_objects.
         else:
             all_objects = self.allobjs_dict[scan]
         
@@ -2330,8 +2331,9 @@ class ObjFeatureGenerator():
 
     
     def merge_objs_objs(self, objects:MapObjectList, new_objs:MapObjectList, cfg, vp_path_list:list=None, cur_scan=None):    
-            
-        objects.extend(new_objs)
+        
+        if new_objs is not None:    
+            objects.extend(new_objs)
         
         # objects = denoise_objects(cfg, objects)  
         objects = merge_objects(cfg, objects)
