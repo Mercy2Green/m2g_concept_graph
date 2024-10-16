@@ -62,7 +62,7 @@ from torch.cuda.amp import autocast, GradScaler
 from vlnce_baselines.common.ops import pad_tensors_wgrad, gen_seq_masks,pad_tensors_2dim
 from torch.nn.utils.rnn import pad_sequence
 
-from conceptgraph.cg_process.obj_edge_processor import ObjEdgeProcessor, FeatureMergeDataset, ConfigDict, ObjFeatureGenerator, time_logger, combine_pose, Twc_to_Thc, Thc_to_Twc
+from conceptgraph.cg_process.obj_edge_processor import ObjEdgeProcessor, FeatureMergeDataset, ConfigDict, ObjFeatureGenerator, time_logger, combine_pose, Twc_to_Thc, Thc_to_Twc, mute_print
 from vlnce_baselines.models.graph_utils import heading_from_quaternion
 from vlnce_baselines.models.bev_utils import transfrom3D, bevpos_polar, PointCloud
 
@@ -101,6 +101,7 @@ class RLTrainer(BaseVLNCETrainer):
             )
         # self.obj_feature_generator = ObjFeatureGenerator(generator_device=self.device)
         self.obj_feature_generator = ObjFeatureGenerator()
+        self.places_dict, self.room_connection_dict = get_places_room_inputs(self.config)
 
     def _make_dirs(self):
         if self.config.local_rank == 0:
@@ -125,10 +126,8 @@ class RLTrainer(BaseVLNCETrainer):
     def _init_obj_edge_processor(self):
         self.obj_edge_processor = ObjEdgeProcessor(
             objs_hdf5_save_dir="/data0/vln_datasets/preprocessed_data/finetune_cg_hdf5",
-            # objs_hdf5_save_dir="/data0/vln_datasets/preprocessed_data/test_cg_hdf5",
             objs_hdf5_save_file_name="finetune_cg_data.hdf5",
             edges_hdf5_save_dir="/data0/vln_datasets/preprocessed_data/edges_hdf5",
-            # edges_hdf5_save_dir="/data0/vln_datasets/preprocessed_data/test_cg_hdf5",
             edges_hdf5_save_file_name="edges.hdf5",
             connectivity_dir="/home/lg1/peteryu_workspace/BEV_HGT_VLN/datasets/R2R/connectivity",
             connectivity_file_name="scans.txt",
@@ -149,14 +148,14 @@ class RLTrainer(BaseVLNCETrainer):
         #     connectivity_file_name="scans.txt",
         #     obj_feature_name="clip",
         #     obj_pose_name="bbox_np",
-        #     allobjs_dict=[],
+        #     allobjs_dict={},
         #     alledges_dict={},
         #     allvps_pos_dict={}
         #     )
         
-        self.obj_edge_processor.allobjs_dict = self.obj_edge_processor.load_allobjs_from_hdf5()
-        self.obj_edge_processor.alledges_dict = self.obj_edge_processor.get_edges_from_hdf5()
-        self.obj_edge_processor.allvps_pos_dict = self.obj_edge_processor.load_allvps_pos_from_connectivity_json()
+        # self.obj_edge_processor.allobjs_dict = self.obj_edge_processor.load_allobjs_from_hdf5()
+        # self.obj_edge_processor.alledges_dict = self.obj_edge_processor.get_edges_from_hdf5()
+        # self.obj_edge_processor.allvps_pos_dict = self.obj_edge_processor.load_allvps_pos_from_connectivity_json()
         # print("Loaded objs and edges from hdf5")
         
     def _init_obj_feature_generator(self):
@@ -286,7 +285,7 @@ class RLTrainer(BaseVLNCETrainer):
         ''' initialize the waypoint predictor here '''
         from vlnce_baselines.waypoint_pred.TRM_net import BinaryDistPredictor_TRM
         self.waypoint_predictor = BinaryDistPredictor_TRM(device=self.device)
-        cwp_fn = 'data/wp_pred/check_cwp_bestdist_hfov63' if self.config.MODEL.task_type == 'rxr' else 'data/wp_pred/check_cwp_bestdist_hfov90'
+        cwp_fn = '/home/lg1/lujia/VLN_HGT/data/wp_pred/check_cwp_bestdist_hfov63' if self.config.MODEL.task_type == 'rxr' else '/home/lg1/lujia/VLN_HGT/data/wp_pred/check_cwp_bestdist_hfov90'
         self.waypoint_predictor.load_state_dict(torch.load(cwp_fn, map_location = torch.device('cpu'))['predictor']['state_dict'])
         for param in self.waypoint_predictor.parameters():
             param.requires_grad_(False)
@@ -810,7 +809,7 @@ class RLTrainer(BaseVLNCETrainer):
             self.envs.observation_spaces[0], obs_transforms
         )
         
-        
+        self.places_dict, self.room_connection_dict = get_places_room_inputs(self.config)
         ## M2G
         self._init_obj_edge_processor()
         self._init_obj_feature_generator()
@@ -1057,6 +1056,7 @@ class RLTrainer(BaseVLNCETrainer):
             room_room_edge_index = torch.tensor(room_room_edge_index).to(room_connection.device)
             # change to local room idxs
             room_room_edge_index = self.map_room_idx_to_local_2dim(current_map_list, room_room_edge_index)
+            room_room_edge_index = room_room_edge_index + graph_info['obj_lens'] # plus and offset
             # r-r edge type
             room_room_edge_type = torch.full((room_room_edge_index.shape[0],), 4, dtype=torch.long).to(room_connection.device)
             ### concat all edge index
@@ -1468,7 +1468,6 @@ class RLTrainer(BaseVLNCETrainer):
                 detection_list, classes_list = self.obj_feature_generator.obj_feature_generate(dataset)
                 
                 cur_step_id= f"step_{stepk}"
-                print(f"cur_env: {i},cur_step: {cur_step_id}")
                 path_vp_envs[i].append(cur_step_id)
                 
                 fg_detections_list, bg_detections_list = self.obj_feature_generator.process_detections_for_merge(
@@ -1491,9 +1490,12 @@ class RLTrainer(BaseVLNCETrainer):
                 ## 
 
                 ### V2
-                _cur_surround_objs = MapObjectList()
-                _cur_surround_objs = self.obj_feature_generator.detections_to_objs(_cur_surround_objs, fg_detections_list, bg_detections_list, self.config_dict.merge_config, path_vp_position[i])
-                all_objs_envs[i] = self.obj_feature_generator.merge_objs_objs(all_objs_envs[i], _cur_surround_objs[i], self.config_dict.merge_config, path_vp_position[i], cur_scan_i)
+                with mute_print():
+                    _cur_surround_objs = MapObjectList()
+                    _cur_surround_objs = self.obj_feature_generator.detections_to_objs(_cur_surround_objs, fg_detections_list, bg_detections_list, self.config_dict.merge_config, path_vp_position[i])
+                    all_objs_envs[i] = self.obj_feature_generator.merge_objs_objs(all_objs_envs[i], _cur_surround_objs[0], self.config_dict.merge_config, path_vp_position[i], cur_scan_i)
+                    
+                print(f"cur_env: {i}, cur_step: {cur_step_id}, ojbs_num: {len(all_objs_envs[i])}")
                 
                 ### V1
                 # all_objs_envs[i], bg_objects = self.obj_feature_generator.merge_objs_detections(all_objs_envs[i], fg_detections_list, bg_detections_list, self.config_dict.merge_config, path_vp_position[i])
