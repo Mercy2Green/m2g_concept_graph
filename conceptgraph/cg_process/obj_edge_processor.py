@@ -1387,6 +1387,8 @@ class FeatureMergeDataset(GradSLAMDataset):
         depth = min_depth * 100.0 + depth * (max_depth - min_depth) * 100.0
         depth = depth / 100.
         
+        depth[depth==max_depth] = 0
+        
         return depth.squeeze(0)
     
     def __getitem__(self, index):
