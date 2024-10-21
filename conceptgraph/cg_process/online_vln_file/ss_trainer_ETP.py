@@ -1,3 +1,4 @@
+import datetime
 import gc
 import os
 import sys
@@ -137,22 +138,9 @@ class RLTrainer(BaseVLNCETrainer):
             alledges_dict={},
             allvps_pos_dict={}
             )
-
-        ### FOR A6000 Server
-        # self.obj_edge_processor = ObjEdgeProcessor(
-        #     objs_hdf5_save_dir="/home/lujia/VLN_HGT/VLN_HGT/pretrain_src/datasets/cg_data",
-        #     objs_hdf5_save_file_name="finetune_cg_data.hdf5",
-        #     edges_hdf5_save_dir="/home/lujia/VLN_HGT/VLN_HGT/pretrain_src/datasets/cg_data",
-        #     edges_hdf5_save_file_name="edges.hdf5",
-        #     connectivity_dir="/home/lujia/VLN_HGT/VLN_HGT/pretrain_src/datasets/R2R/connectivity",
-        #     connectivity_file_name="scans.txt",
-        #     obj_feature_name="clip",
-        #     obj_pose_name="bbox_np",
-        #     allobjs_dict={},
-        #     alledges_dict={},
-        #     allvps_pos_dict={}
-        #     )
         
+        
+        ### The following code is only for the training process. I already add the code in the train function. You don't need to run it again.
         # self.obj_edge_processor.allobjs_dict = self.obj_edge_processor.load_allobjs_from_hdf5()
         # self.obj_edge_processor.alledges_dict = self.obj_edge_processor.get_edges_from_hdf5()
         # self.obj_edge_processor.allvps_pos_dict = self.obj_edge_processor.load_allvps_pos_from_connectivity_json()
@@ -531,6 +519,11 @@ class RLTrainer(BaseVLNCETrainer):
         # M2G
         self._init_obj_edge_processor()
         self._init_obj_feature_generator()
+        
+        self.obj_edge_processor.allobjs_dict = self.obj_edge_processor.load_allobjs_from_hdf5()
+        self.obj_edge_processor.alledges_dict = self.obj_edge_processor.get_edges_from_hdf5()
+        self.obj_edge_processor.allvps_pos_dict = self.obj_edge_processor.load_allvps_pos_from_connectivity_json()
+        
         self._set_config()
         if self.config.MODEL.task_type == 'rxr':
             self.gt_data = {}
@@ -789,7 +782,7 @@ class RLTrainer(BaseVLNCETrainer):
         self.world_size = self.config.GPU_NUMBERS
         self.local_rank = self.config.local_rank
         if self.world_size > 1:
-            distr.init_process_group(backend='nccl', init_method='env://')
+            distr.init_process_group(backend='nccl', init_method='env://', timeout=datetime.timedelta(hours=12))
             self.device = self.config.TORCH_GPU_IDS[self.local_rank]
             torch.cuda.set_device(self.device)
             self.config.defrost()
@@ -1495,7 +1488,7 @@ class RLTrainer(BaseVLNCETrainer):
                     _cur_surround_objs = self.obj_feature_generator.detections_to_objs(_cur_surround_objs, fg_detections_list, bg_detections_list, self.config_dict.merge_config, path_vp_position[i])
                     all_objs_envs[i] = self.obj_feature_generator.merge_objs_objs(all_objs_envs[i], _cur_surround_objs[0], self.config_dict.merge_config, path_vp_position[i], cur_scan_i)
                     
-                print(f"cur_env: {i}, cur_step: {cur_step_id}, ojbs_num: {len(all_objs_envs[i])}")
+                print(f"cur_env: {i}, cur_step: {cur_step_id}, objs_num: {len(all_objs_envs[i])}")
                 
                 ### V1
                 # all_objs_envs[i], bg_objects = self.obj_feature_generator.merge_objs_detections(all_objs_envs[i], fg_detections_list, bg_detections_list, self.config_dict.merge_config, path_vp_position[i])
