@@ -1495,7 +1495,93 @@ class ObjFeatureGenerator():
         self.get_detection_config(detection_dict)
         self.get_merge_config(merge_dict)
 
+    
+    def extract_clip_feature(self, _image_rgb, view_idx=None):
+    
+        # image (224, 224, 3) 0-255 rgb
+        # detect_class: str 
+        
+        # set device
+        _device = self.get_device()
+        
+        detections_list = []
+        classes_list = []
+        
+        # detection_config_copy = self.detection_config.copy()
+        # detection_config_copy.class_set = "tag2text"
+        
+        with torch.set_grad_enabled(False):
+            _classes, _text_prompt, _caption = self.tag2text_inference(
+                cfg=self.detection_config,
+                # cfg=detection_config_copy,
+                image_rgb=_image_rgb,
+                tagging_model=self.tagging_model,
+                tagging_transform=self.tagging_transform,
+                specified_tags=self.specified_tags, 
+                # specified_tags=[detect_class],
+                device = _device
+            )
+
+            with mute_print():
+                
+                _detections = self.detection_inference(
+                    cfg=self.detection_config,
+                    # cfg=detection_config_copy,
+                    image_rgb = _image_rgb, 
+                    classes = _classes, 
+                    sam_variant = self.detection_config.sam_variant, 
+                    mask_generator = self.mask_generator,
+                    grounding_dino_model = self.grounding_dino_model,
+                    device = _device
+                )
+                
+                _image_crops, _image_feats, _text_feats = self.segementation_inference(
+                    cfg=self.detection_config,
+                    # cfg=detection_config_copy,
+                    image_rgb = _image_rgb,
+                    detections = _detections,
+                    text_prompt = _text_prompt,
+                    caption = _caption,
+                    sam_predictor = self.sam_predictor,
+                    clip_model = self.clip_model,
+                    clip_preprocess = self.clip_preprocess,
+                    clip_tokenizer = self.clip_tokenizer,
+                    classes = _classes,
+                    device = _device,
+                    image_idx = view_idx+12,
+                )
+
+            # Convert the detections to a dict. The elements are in np.array
+            detections = {
+                "xyxy": _detections.xyxy,
+                "confidence": _detections.confidence,
+                "class_id": _detections.class_id,
+                "mask": _detections.mask,
+                "classes": _classes,
+                "image_crops": _image_crops,
+                "image_feats": _image_feats,
+                "text_feats": _text_feats,
+            }
             
+            if self.detection_config.class_set in ["ram", "tag2text"]:
+                detections["tagging_caption"] = _caption
+                detections["tagging_text_prompt"] = _text_prompt
+            
+            detections_list.append(detections)
+            classes_list.append(_classes)
+                
+            _class_name, _class_id = [], []
+            n_masks = len(detections['xyxy'])
+            for mask_idx in range(n_masks):
+                local_class_id = detections['class_id'][mask_idx]
+                mask = detections['mask'][mask_idx]
+                class_name = detections['classes'][local_class_id]
+                class_id = -1 if detections['classes'] is None else detections['classes'].index(class_name)
+                _class_name.append(class_name)
+                _class_id.append(class_id)
+            
+        return  _image_feats, _class_name, _class_id, _classes, detections_list, classes_list
+    
     def obj_feature_generate(self, dataset):
         
         # image_rgb is a list of np.array [env * 12 * 224 * 224 * 3]
@@ -1548,7 +1634,8 @@ class ObjFeatureGenerator():
                         clip_preprocess = self.clip_preprocess,
                         clip_tokenizer = self.clip_tokenizer,
                         classes = _classes,
-                        device = _device
+                        device = _device,
+                        image_idx = idx,
                     )
 
                 # Convert the detections to a dict. The elements are in np.array
@@ -1895,7 +1982,8 @@ class ObjFeatureGenerator():
         clip_preprocess,
         clip_tokenizer,
         classes,
-        device
+        device,
+        image_idx=None,
         ):
 
         if len(detections.class_id) > 0:
@@ -1917,7 +2005,11 @@ class ObjFeatureGenerator():
             # random a save name using random number, don't using step
             # vis_save_path = cfg.debug_save_path + "/" + "seg_saves" +"/"+ f"{random.randint(0, 100000):06d}"
             save_image_id = random.randint(0, 100)
+            if image_idx is not None:
+                save_image_id = image_idx
             vis_save_path = cfg.debug_save_path + "/" + "seg_saves" 
+            os.makedirs(vis_save_path, exist_ok=True)
+            print(f"Saving the Segmentation results to {vis_save_path}")
             original_image_save_path = vis_save_path + "/" + f"step{self.step}_ori_{save_image_id:06d}" + ".jpg"
             seg_image_save_path = vis_save_path + "/" + f"step{self.step}_seg_{save_image_id:06d}" + ".jpg"
             
@@ -2160,6 +2252,7 @@ class ObjFeatureGenerator():
             
             # pcd_save_path = cfg.debug_save_path +'/'+ 'pcd_saves' +'/'+ f"full_pcd_{cfg.gsa_variant}_{cfg.save_suffix}_step{self.step}.pkl.gz"
             pcd_save_path = cfg.debug_save_path +'/'+ 'pcd_saves' +'/'+ f"full_pcd_step{self.step}.pkl.gz"
+            os.makedirs(cfg.debug_save_path +'/'+ 'pcd_saves', exist_ok=True)
             
         #     with gzip.open(pcd_save_path, "wb") as f:
         #         pickle.dump(results, f)
