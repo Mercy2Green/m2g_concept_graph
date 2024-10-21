@@ -495,8 +495,8 @@ class ObjEdgeProcessor():
                 for item in data:
                     if item['included']:
                         # allvps_pos_dict[scan][item['image_id']] = np.array([item['pose'][3], item['pose'][7], item['pose'][11]]) # Mattersim_pose
-                        allvps_pos_dict[scan][item['image_id']] = np.array([item['pose'][3], -(item['pose'][11]-1.25), item['pose'][7]]) # cg_pose
-                        
+                        # allvps_pos_dict[scan][item['image_id']] = np.array([item['pose'][3], -(item['pose'][11]-1.25), item['pose'][7]]) # cg_pose
+                        allvps_pos_dict[scan][item['image_id']] = np.array([item['pose'][3], (item['pose'][11]-1.25), -item['pose'][7]]) # habitat_pose
                         # This is form the "def load_nav_graphs(connectivity_dir):" of the common.py 
         
         self.allvps_pos_dict = allvps_pos_dict
