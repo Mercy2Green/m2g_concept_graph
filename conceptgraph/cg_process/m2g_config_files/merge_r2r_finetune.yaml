@@ -8,7 +8,8 @@ stride: 1
 image_height: null # if null, it will be determined by dataconfig
 image_width: null # if null, it will be determined by dataconfig
 
-debug_save_path: /data0/vln_datasets/preprocessed_data/debug_finetune_online_cg
+# debug_save_path: /data0/vln_datasets/preprocessed_data/debug_finetune_online_cg
+debug_save_path: /data0/vln_datasets/preprocessed_data/debug_finetune_online_cg_zhongzd
 
 # Input detections 
 gsa_variant: ram_withbg_allclasses
