@@ -13,6 +13,8 @@ manipulation/contact_graspnet/test_data
 manipulation/contact_graspnet/checkpoints
 manipulation/dataset
 
+/dataset/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

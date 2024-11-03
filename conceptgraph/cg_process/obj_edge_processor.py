@@ -1513,9 +1513,14 @@ class ObjFeatureGenerator():
             
             for idx in range(len(dataset)):
                 
-                image_key = dataset.rgb_keys[idx]
-                _image_rgb = dataset.image_rgb_dict[image_key]
-
+                # image_key = dataset.rgb_keys[idx]
+                # _image_rgb = dataset.image_rgb_dict[image_key]
+                _image_rgb_tensor = dataset[idx][0]
+                _image_rgb = _image_rgb_tensor.cpu().numpy()
+                _image_rgb = np.uint8(_image_rgb)
+                
+                print(f"Processing the {idx}/{len(dataset)}th image")
+                
                 _classes, _text_prompt, _caption = self.tag2text_inference(
                     cfg=self.detection_config,
                     image_rgb=_image_rgb,
@@ -1918,6 +1923,7 @@ class ObjFeatureGenerator():
             # vis_save_path = cfg.debug_save_path + "/" + "seg_saves" +"/"+ f"{random.randint(0, 100000):06d}"
             save_image_id = random.randint(0, 100)
             vis_save_path = cfg.debug_save_path + "/" + "seg_saves" 
+            os.makedirs(vis_save_path, exist_ok=True)
             original_image_save_path = vis_save_path + "/" + f"step{self.step}_ori_{save_image_id:06d}" + ".jpg"
             seg_image_save_path = vis_save_path + "/" + f"step{self.step}_seg_{save_image_id:06d}" + ".jpg"
             
@@ -1936,7 +1942,7 @@ class ObjFeatureGenerator():
         
         return image_crops, image_feats, text_feats
 
-    def process_detections_for_merge(self, detecitions_gobs, classes_gobs, dataset:FeatureMergeDataset, cur_step_name:str):
+    def process_detections_for_merge(self, detecitions_gobs, classes_gobs, dataset:FeatureMergeDataset, cur_step_name:str='None'):
         
         if self.merge_config == {}:
             raise ValueError("The merge config is not loaded. ")
@@ -1966,7 +1972,7 @@ class ObjFeatureGenerator():
             # assert image_rgb.max() > 1, "Image is not in range [0, 255]"
             
             # Get the depth image
-            depth_tensor = depth_tensor[16:240, 16:240]
+            # depth_tensor = depth_tensor[16:240, 16:240]
             depth_tensor = depth_tensor[..., 0]
             depth_array = depth_tensor.cpu().numpy()
 
@@ -2360,6 +2366,7 @@ class ObjFeatureGenerator():
             # pcd_save_path = cfg.debug_save_path +'/'+ 'pcd_saves' +'/'+ f"full_pcd_{cfg.gsa_variant}_{cfg.save_suffix}_step{self.step}.pkl.gz"
             # pcd_save_path = cfg.debug_save_path +'/'+ 'pcd_saves' +'/'+ f"full_objs_step{self.step}_{cur_scan}.pkl.gz"
             pcd_save_path = cfg.debug_save_path +'/'+ 'pcd_saves' +'/'+ f"full_objs_step{self.step}.pkl.gz"
+            os.makedirs(cfg.debug_save_path +'/'+ 'pcd_saves', exist_ok=True)
         
             results['objects'] = objects.to_serializable()
             pcd_save_path = pcd_save_path[:-7] + "_post.pkl.gz"

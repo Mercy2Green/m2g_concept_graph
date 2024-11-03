@@ -1,11 +1,30 @@
-dataset_name: 'r2r'
+dataset_name: 'sim2real'
 camera_params:
-  image_height: 224
-  image_width: 224
-  fx: 112
-  fy: 112
-  cx: 112
-  cy: 112 
-  png_depth_scale: 1 #for depth image in png format 0~10 is ok.
+  image_height: 720
+  image_width: 1280
+  fx: 630.791
+  fy: 610.789
+  cx: 637.383
+  cy: 358.676
+  png_depth_scale: 1000
+
+# [610.6340942382812, 0.0, 635.8567504882812], [0.0, 610.8860473632812, 355.1409912109375]
+  # fx: 610.6340942382812
+  # fy: 610.8860473632812
+  # cx: 635.8567504882812
+  # cy: 355.1409912109375
+  
+# 1029  [630.791,0,637.383],[0,610.789,358.676],[0,0,1]
+
+
+# dataset_name: 'r2r'
+# camera_params:
+#   image_height: 224
+#   image_width: 224
+#   fx: 112
+#   fy: 112
+#   cx: 112
+#   cy: 112 
+#   png_depth_scale: 1 
 
   # 50 is to away

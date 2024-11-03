@@ -48,6 +48,7 @@ flag3="--exp_name release_r2r
       TASK_CONFIG.SIMULATOR.HABITAT_SIM_V0.ALLOW_SLIDING True
       INFERENCE.CKPT_PATH data/logs/checkpoints/release_r2r/ckpt.iter12000.pth
       INFERENCE.PREDICTIONS_FILE preds.json
+      INFERENCE.EPISODE_COUNT 300
       IL.back_algo control
       "
 
