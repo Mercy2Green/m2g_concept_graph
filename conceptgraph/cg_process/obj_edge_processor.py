@@ -1,3 +1,4 @@
+import datetime
 import os
 import random
 import numpy as np
@@ -1921,14 +1922,23 @@ class ObjFeatureGenerator():
             
             # random a save name using random number, don't using step
             # vis_save_path = cfg.debug_save_path + "/" + "seg_saves" +"/"+ f"{random.randint(0, 100000):06d}"
-            save_image_id = random.randint(0, 100)
-            vis_save_path = cfg.debug_save_path + "/" + "seg_saves" 
+            
+            # Save name using time e.g. 2024_11_16_21_46_21
+            save_image_id = datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+
+            vis_save_path = cfg.debug_save_path + "/" + "seg_saves"
             os.makedirs(vis_save_path, exist_ok=True)
-            original_image_save_path = vis_save_path + "/" + f"step{self.step}_ori_{save_image_id:06d}" + ".jpg"
-            seg_image_save_path = vis_save_path + "/" + f"step{self.step}_seg_{save_image_id:06d}" + ".jpg"
+            original_image_save_path = vis_save_path + "/" + f"step{self.step}_ori_{save_image_id}" + ".jpg"
+            seg_image_save_path = vis_save_path + "/" + f"step{self.step}_seg_{save_image_id}" + ".jpg"
+            
+            # save_image_id = random.randint(0, 100)
+            # vis_save_path = cfg.debug_save_path + "/" + "seg_saves" 
+            # os.makedirs(vis_save_path, exist_ok=True)
+            # original_image_save_path = vis_save_path + "/" + f"step{self.step}_ori_{save_image_id:06d}" + ".jpg"
+            # seg_image_save_path = vis_save_path + "/" + f"step{self.step}_seg_{save_image_id:06d}" + ".jpg"
             
             image_bgr = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
-            annotated_image, labels = vis_result_fast(image_bgr, detections, classes)
+            annotated_image, labels = vis_result_fast(image_bgr, detections, classes, draw_bbox=False)
             
             # save the annotated grounded-sam image
             if cfg.class_set in ["ram", "tag2text"] and cfg.use_slow_vis:
@@ -2338,7 +2348,7 @@ class ObjFeatureGenerator():
     
 
     
-    def merge_objs_objs(self, objects:MapObjectList, new_objs:MapObjectList, cfg, vp_path_list:list=None, cur_scan=None):    
+    def merge_objs_objs(self, objects:MapObjectList, new_objs:MapObjectList, cfg, vp_path_list:list=None, pcd_save_path:str=None):    
         
         if new_objs is not None:    
             objects.extend(new_objs)
@@ -2365,7 +2375,11 @@ class ObjFeatureGenerator():
             }
             # pcd_save_path = cfg.debug_save_path +'/'+ 'pcd_saves' +'/'+ f"full_pcd_{cfg.gsa_variant}_{cfg.save_suffix}_step{self.step}.pkl.gz"
             # pcd_save_path = cfg.debug_save_path +'/'+ 'pcd_saves' +'/'+ f"full_objs_step{self.step}_{cur_scan}.pkl.gz"
-            pcd_save_path = cfg.debug_save_path +'/'+ 'pcd_saves' +'/'+ f"full_objs_step{self.step}.pkl.gz"
+            if pcd_save_path == None:
+                pcd_save_path = cfg.debug_save_path +'/'+ 'pcd_saves' +'/'+ f"full_objs_step{self.step}.pkl.gz"
+            else:
+                pcd_save_path =  cfg.debug_save_path +'/'+ 'pcd_saves' +'/'+ f"{pcd_save_path}_d{cfg.obj_min_detections}.pkl.gz"
+                
             os.makedirs(cfg.debug_save_path +'/'+ 'pcd_saves', exist_ok=True)
         
             results['objects'] = objects.to_serializable()

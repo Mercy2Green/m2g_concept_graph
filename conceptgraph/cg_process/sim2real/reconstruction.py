@@ -146,7 +146,13 @@ L2C_TRANSFORM = np.array(
         [0.999075,-0.00764551,-0.0423244,0.0611374],
         [0,0,0,1]])
 
+C2G_TRANSFORM = np.array([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, -0.06], [0.0, 0.0, 0.0, 1.0]])
 
+G2L_TRANSFORM = np.array(
+    [   [-0.00859563, -0.999714, -0.0223111, 0.01927], 
+        [-0.0428589, 0.0227041, -1.00387, 0.699481], 
+        [0.999075, -0.00764551, -0.0423244, 0.0], 
+        [0.0, 0.0, 0.0, 1.0]])
 
 
 class ReconstructionDataset(GradSLAMDataset):
@@ -217,6 +223,101 @@ class ReconstructionDataset(GradSLAMDataset):
         return poses
 
     
+ 
+class GimbalReconstructionDataset(GradSLAMDataset):
+    
+    def __init__(
+        self,
+        config_dict,
+        basedir,
+        sequence, # the scan_id
+        trajectory,
+        trajectory_all = True,
+        stride: Optional[int] = None,
+        start: Optional[int] = 0,
+        end: Optional[int] = -1,
+        desired_height: Optional[int] = 224,
+        desired_width: Optional[int] = 224,
+        load_embeddings: Optional[bool] = False,
+        embedding_dir: Optional[str] = "embeddings",
+        embedding_dim: Optional[int] = 512,
+        relative_pose: Optional[bool] = False,
+        **kwargs,
+    ):
+        self.input_folder = os.path.join(basedir, sequence)
+        # self.pose_path = os.path.join(self.input_folder,"camera_parameter", "camera_parameter_"+ sequence + ".conf")
+        self.pose_path = os.path.join(self.input_folder,"camera_parameter", "camera_parameter" + ".conf")
+        
+        if trajectory_all:
+            self.trajectory = self.get_trajectory()
+        else:
+            self.trajectory = trajectory
+        
+        super().__init__(
+            config_dict,
+            stride=stride,
+            start=start,
+            end=end,
+            desired_height=desired_height,
+            desired_width=desired_width,
+            load_embeddings=load_embeddings,
+            embedding_dir=embedding_dir,
+            embedding_dim=embedding_dim,
+            relative_pose=relative_pose,
+            **kwargs,
+        )
+        
+    def get_trajectory(self):
+        config = configparser.ConfigParser()
+        config.read(self.pose_path)
+        trajectory = []
+        for sec_idx in config.sections():
+            trajectory.append(sec_idx)
+        return trajectory
+
+    def get_filepaths(self):
+        color_paths = []
+        depth_paths = []
+        config = configparser.ConfigParser()
+        config.read(self.pose_path)
+        #print("pose path, the config file path",pose_path)
+        # for sec_idx in config.sections():
+        #     # Use ast.literal_eval to convert string representation of list to actual list
+        #     rgb_name = config.get(sec_idx, 'rgb_name')
+        #     depth_name = config.get(sec_idx, 'depth_name')
+        #     color_paths.append(os.path.join(self.input_folder,"color_image", rgb_name))
+        #     depth_paths.append(os.path.join(self.input_folder,"depth_image",depth_name))
+            
+        for sec_idx in self.trajectory:
+            rgb_name = config.get(sec_idx, 'rgb_name')
+            depth_name = config.get(sec_idx, 'depth_name')
+            color_paths.append(os.path.join(self.input_folder,"color_image", rgb_name))
+            depth_paths.append(os.path.join(self.input_folder,"depth_image",depth_name))
+
+        embedding_paths = []
+        return color_paths, depth_paths, embedding_paths
+
+    def load_poses(self):
+        poses = []
+        config = configparser.ConfigParser()
+        config.read(self.pose_path)
+
+        # for sec_idx in config.sections():
+        for sec_idx in self.trajectory:
+            data = config.get(sec_idx, 'lpose')
+            # Define array in the local scope
+            local_scope = {'array': np.array}
+            # Evaluate the string representation of the arrays
+            arrays = eval(data, {"__builtins__": None}, local_scope)
+            
+            heading_list = config.get(sec_idx, 'heading')
+            
+            for array in arrays:
+                T_
+
+        return poses
+    
+    
 class Reconstruction(object):
     
     def __init__(self) -> None:
@@ -230,6 +331,9 @@ class Reconstruction(object):
             )
         # self.obj_feature_generator = ObjFeatureGenerator(generator_device=self.device)
         self.obj_feature_generator = ObjFeatureGenerator()
+        
+        self._init_obj_edge_processor()
+        self._init_obj_feature_generator()
 
     def _init_obj_edge_processor(self):
         self.obj_edge_processor = ObjEdgeProcessor(
@@ -253,17 +357,14 @@ class Reconstruction(object):
             )
         self.obj_feature_generator.init_model()
         
-    def reconstruction(self, dataset="test_1", _start=0, _end=-1, _stride=None):
+    def reconstruction(self, dataset_name="test_1", _start=0, _end=-1, _stride=None):
         
         all_objs = MapObjectList()
         
-        self._init_obj_edge_processor()
-        self._init_obj_feature_generator()
-        
         dataset = ReconstructionDataset(
             config_dict=self.config_dict.dataset_config,
-            basedir="/home/lg1/peteryu_workspace/m2g_concept_graph/dataset/",
-            sequence=dataset,
+            basedir="/home/lg1/peteryu_workspace/m2g_concept_graph/dataset/1101_dataset/loop/",
+            sequence=dataset_name,
             desired_height=224,
             desired_width=224,
             start=_start,
@@ -284,12 +385,55 @@ class Reconstruction(object):
         
         _cur_surround_objs = MapObjectList()
         _cur_surround_objs = self.obj_feature_generator.detections_to_objs(_cur_surround_objs, fg_detections_list, bg_detections_list, self.config_dict.merge_config)
-        all_objs = self.obj_feature_generator.merge_objs_objs(all_objs, _cur_surround_objs[0], self.config_dict.merge_config, vp_path_list=vp_list)
+        all_objs = self.obj_feature_generator.merge_objs_objs(
+            all_objs, _cur_surround_objs[0], self.config_dict.merge_config, vp_path_list=vp_list, pcd_save_path=dataset_name)
         
         print("We have reconstructed the objects!!!!!!!!")
         
+    def reconstruction_gimbal(self, dataset_name="test_1", _start=0, _end=-1, _stride=None):
+        
+        all_objs = MapObjectList()
+        
+        dataset = GimbalReconstructionDataset(
+            config_dict=self.config_dict.dataset_config,
+            basedir="/home/lg1/peteryu_workspace/m2g_concept_graph/dataset/1101_dataset/gimbal/",
+            sequence=dataset_name,
+            trajectory=[],
+            trajectory_all=True,
+            desired_height=224,
+            desired_width=224,
+            start=_start,
+            stride=_stride,
+            end=_end
+        )
+    
+        detection_list, classes_list = self.obj_feature_generator.obj_feature_generate(dataset)
+        
+        fg_detections_list, bg_detections_list = self.obj_feature_generator.process_detections_for_merge(
+                    detection_list, 
+                    classes_list, 
+                    dataset,
+                    )
+        
+        vp_000 = np.array([0, 0, 0])
+        vp_list = [vp_000]
+        
+        _cur_surround_objs = MapObjectList()
+        _cur_surround_objs = self.obj_feature_generator.detections_to_objs(_cur_surround_objs, fg_detections_list, bg_detections_list, self.config_dict.merge_config)
+        all_objs = self.obj_feature_generator.merge_objs_objs(
+            all_objs, _cur_surround_objs[0], self.config_dict.merge_config, vp_path_list=vp_list, pcd_save_path=dataset_name)
+        
+        print("We have reconstructed the objects!!!!!!!!")
 
 if __name__ == "__main__":
     reconstruction = Reconstruction()
-    reconstruction.reconstruction(dataset="1030_loop/1030_test3_2")
+    # reconstruction.reconstruction("1101_test_1_1")
+    # reconstruction.reconstruction("1101_test_1_2")
+    # reconstruction.reconstruction("1101_test_2_1")
+    # reconstruction.reconstruction("1101_test_2_2")
+    # reconstruction.reconstruction("1101_test_3_1")
+    # reconstruction.reconstruction("1101_test_3_2_cut")
+    
+    # ### Gimbal
+    reconstruction.reconstruction_gimbal("1101_test_3_2")
         

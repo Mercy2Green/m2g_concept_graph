@@ -27,5 +27,5 @@ save_video: false
 device: "cuda"
 use_slow_vis: false
 exp_suffix: "withbg_allclasses"
-save_seg: false
+save_seg: true
 debug_save_path: /data0/vln_datasets/preprocessed_data/debug_sim2real
