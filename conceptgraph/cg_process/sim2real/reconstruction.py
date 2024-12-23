@@ -280,29 +280,30 @@ class GimbalReconstructionDataset(GradSLAMDataset):
         depth_paths = []
         config = configparser.ConfigParser()
         config.read(self.pose_path)
-        #print("pose path, the config file path",pose_path)
-        # for sec_idx in config.sections():
-        #     # Use ast.literal_eval to convert string representation of list to actual list
-        #     rgb_name = config.get(sec_idx, 'rgb_name')
-        #     depth_name = config.get(sec_idx, 'depth_name')
-        #     color_paths.append(os.path.join(self.input_folder,"color_image", rgb_name))
-        #     depth_paths.append(os.path.join(self.input_folder,"depth_image",depth_name))
             
         for sec_idx in self.trajectory:
-            rgb_name = config.get(sec_idx, 'rgb_name')
-            depth_name = config.get(sec_idx, 'depth_name')
-            color_paths.append(os.path.join(self.input_folder,"color_image", rgb_name))
-            depth_paths.append(os.path.join(self.input_folder,"depth_image",depth_name))
+            rgb_names = config.get(sec_idx, 'rgb_name').strip('[]').replace("'", "").split(', ')
+            depth_names = config.get(sec_idx, 'depth_name').strip('[]').replace("'", "").split(', ')
+            
+            for rgb_name, depth_name in zip(rgb_names, depth_names):
+                color_paths.append(os.path.join(self.input_folder, "color_image", rgb_name))
+                depth_paths.append(os.path.join(self.input_folder, "depth_image", depth_name))
 
         embedding_paths = []
         return color_paths, depth_paths, embedding_paths
 
     def load_poses(self):
+        
+        ## First get lpose, it is the laser pose in the world frame
+        ## We need to convert it to the camera pose in the world frame.
+        ## First we need to convert the laser pose to gimbal pose, the camera is on the gimbal
+        ## Then we need to convert the gimbal pose to the camera pose. We need use the heading value to rotate the camera pose.
+        ## We have G2L_TRANSFORM, and C2G_TRANSFORM, we can use them to convert the laser pose to the camera pose.
+        
         poses = []
         config = configparser.ConfigParser()
         config.read(self.pose_path)
 
-        # for sec_idx in config.sections():
         for sec_idx in self.trajectory:
             data = config.get(sec_idx, 'lpose')
             # Define array in the local scope
@@ -310,10 +311,25 @@ class GimbalReconstructionDataset(GradSLAMDataset):
             # Evaluate the string representation of the arrays
             arrays = eval(data, {"__builtins__": None}, local_scope)
             
-            heading_list = config.get(sec_idx, 'heading')
+            heading_list = config.get(sec_idx, 'heading').strip('[]').split(',')
+            # Convert angles from degrees to radians and negate for clockwise rotation
+            heading_angles = [-np.radians(float(item)) for item in heading_list]
             
-            for array in arrays:
-                T_
+            for array, angle in zip(arrays, heading_angles):
+                T_l2w = np.array(array)
+                T_g2l = G2L_TRANSFORM
+                T_g2w = np.dot(T_l2w, np.linalg.inv(T_g2l))
+                T_c2g = C2G_TRANSFORM
+                T_c2w = np.dot(T_g2w, T_c2g)
+                
+                # Create quaternion from the angle
+                heading_quaternion = quaternion.from_euler_angles(0, 0, angle)
+                R_heading = quaternion.as_rotation_matrix(heading_quaternion)
+                
+                # Apply heading rotation to the camera pose
+                T_c2w[:3, :3] = np.dot(R_heading, T_c2w[:3, :3])
+                
+                poses.append(torch.tensor(T_c2w))
 
         return poses
     
