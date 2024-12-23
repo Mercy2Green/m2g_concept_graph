@@ -316,23 +316,54 @@ class GimbalReconstructionDataset(GradSLAMDataset):
             heading_angles = [-np.radians(float(item)) for item in heading_list]
             
             for array, angle in zip(arrays, heading_angles):
-                T_l2w = np.array(array)
-                T_g2l = G2L_TRANSFORM
-                T_g2w = np.dot(T_l2w, np.linalg.inv(T_g2l))
-                T_c2g = C2G_TRANSFORM
-                T_c2w = np.dot(T_g2w, T_c2g)
+                T_l2w = np.array(array)  # Laser to world transformation
+                T_g2l = G2L_TRANSFORM    # Gimbal to laser transformation
+                T_g2w = np.dot(T_l2w, np.linalg.inv(T_g2l))  # Gimbal to world transformation
                 
-                # Create quaternion from the angle
-                heading_quaternion = quaternion.from_euler_angles(0, 0, angle)
-                R_heading = quaternion.as_rotation_matrix(heading_quaternion)
+                _T_g2c = np.linalg.inv(C2G_TRANSFORM)  # Initial gimbal to camera transformation
+                T_g2c = calculate_T_g2c(_T_g2c, angle)  # Final gimbal to camera transformation with heading
                 
-                # Apply heading rotation to the camera pose
-                T_c2w[:3, :3] = np.dot(R_heading, T_c2w[:3, :3])
+                T_c2w = np.dot(T_g2w, np.linalg.inv(T_g2c))  # Camera to world transformation
                 
                 poses.append(torch.tensor(T_c2w))
 
         return poses
+
+def calculate_T_g2c(T_g2c_initial, heading):
+    """
+    Calculate the final transformation matrix T_g2c using an initial T_g2c and heading.
+
+    Args:
+        T_g2c_initial (np.ndarray): The initial gimbal to camera transformation matrix (4x4).
+        heading (float): The heading angle in radians.
+
+    Returns:
+        np.ndarray: The final transformation matrix T_g2c (4x4).
+    """
     
+    # Extract rotation and translation from the initial T_g2c
+    R_g2c_initial = T_g2c_initial[:3, :3]
+    t_g2c_initial = T_g2c_initial[:3, 3]
+
+    # Calculate the heading rotation matrix (counterclockwise rotation around Z-axis)
+    R_heading = np.array([
+        [np.cos(heading), -np.sin(heading), 0],
+        [np.sin(heading), np.cos(heading), 0],
+        [0, 0, 1]
+    ])
+
+    # Combine the heading rotation with the initial gimbal to camera rotation
+    R_g2c_final = R_heading @ R_g2c_initial
+    t_g2c_final = t_g2c_initial  # Translation remains the same
+
+    # Construct the final transformation matrix T_g2c
+    T_g2c_final = np.eye(4)
+    T_g2c_final[:3, :3] = R_g2c_final
+    T_g2c_final[:3, 3] = t_g2c_final
+
+    return T_g2c_final
+
+
     
 class Reconstruction(object):
     
@@ -410,12 +441,25 @@ class Reconstruction(object):
         
         all_objs = MapObjectList()
         
+        # dataset = GimbalReconstructionDataset(
+        #     config_dict=self.config_dict.dataset_config,
+        #     basedir="/home/lg1/peteryu_workspace/m2g_concept_graph/dataset/1101_dataset/gimbal/",
+        #     sequence=dataset_name,
+        #     trajectory=[],
+        #     trajectory_all=True,
+        #     desired_height=224,
+        #     desired_width=224,
+        #     start=_start,
+        #     stride=_stride,
+        #     end=_end
+        # )
+        
         dataset = GimbalReconstructionDataset(
             config_dict=self.config_dict.dataset_config,
-            basedir="/home/lg1/peteryu_workspace/m2g_concept_graph/dataset/1101_dataset/gimbal/",
+            basedir="/home/lg1/peteryu_workspace/m2g_concept_graph/dataset/slam/gimbal",
             sequence=dataset_name,
-            trajectory=[],
-            trajectory_all=True,
+            trajectory=['vp_0'],
+            trajectory_all=False,
             desired_height=224,
             desired_width=224,
             start=_start,
@@ -451,5 +495,5 @@ if __name__ == "__main__":
     # reconstruction.reconstruction("1101_test_3_2_cut")
     
     # ### Gimbal
-    reconstruction.reconstruction_gimbal("1101_test_3_2")
+    reconstruction.reconstruction_gimbal("test_1210_1")
         
