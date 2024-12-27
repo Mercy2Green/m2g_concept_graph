@@ -352,49 +352,6 @@ def calculate_T_g2c(T_g2c_initial, angle):
 
     return T_g2c
 
-def rotation_matrix_x(angle):
-    """
-    Create a rotation matrix for a counterclockwise rotation around the X-axis.
-
-    Args:
-        angle (float): The rotation angle in radians.
-
-    Returns:
-        np.ndarray: The rotation matrix (3x3).
-    """
-    return np.array([
-        [1, 0, 0],
-        [0, np.cos(angle), -np.sin(angle)],
-        [0, np.sin(angle), np.cos(angle)]
-    ])
-
-def rotation_matrix_y(angle):
-    """
-    Create a rotation matrix for a clockwise rotation around the Y-axis.
-
-    Args:
-        angle (float): The rotation angle in radians.
-
-    Returns:
-        np.ndarray: The rotation matrix (3x3).
-    """
-    return 
-
-def rotation_matrix_z(angle):
-    """
-    Create a rotation matrix for a counterclockwise rotation around the Z-axis.
-
-    Args:
-        angle (float): The rotation angle in radians.
-
-    Returns:
-        np.ndarray: The rotation matrix (3x3).
-    """
-    return np.array([
-        [np.cos(angle), -np.sin(angle), 0],
-        [np.sin(angle), np.cos(angle), 0],
-        [0, 0, 1]
-    ])
 
 
     
@@ -491,8 +448,8 @@ class Reconstruction(object):
             config_dict=self.config_dict.dataset_config,
             basedir="/home/lg1/peteryu_workspace/m2g_concept_graph/dataset/slam/gimbal",
             sequence=dataset_name,
-            trajectory=['vp_0'],
-            trajectory_all=False,
+            trajectory=[],
+            trajectory_all=True,
             desired_height=224,
             desired_width=224,
             start=_start,

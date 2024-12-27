@@ -51,7 +51,7 @@ dbscan_min_points: 10
 
 # Selection criteria of the fused object point cloud
 obj_min_points: 20
-obj_min_detections: 5
+obj_min_detections: 4
 obj_min_num: 10
 
 # For merge_overlap_objects() function
