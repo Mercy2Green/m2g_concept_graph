@@ -329,6 +329,107 @@ class GimbalReconstructionDataset(GradSLAMDataset):
 
         return poses
 
+
+
+ 
+class PathReconstructionDataset(GradSLAMDataset):
+    
+    def __init__(
+        self,
+        config_dict,
+        basedir,
+        sequence, # the scan_id
+        trajectory,
+        trajectory_all = True,
+        stride: Optional[int] = None,
+        start: Optional[int] = 0,
+        end: Optional[int] = -1,
+        desired_height: Optional[int] = 224,
+        desired_width: Optional[int] = 224,
+        load_embeddings: Optional[bool] = False,
+        embedding_dir: Optional[str] = "embeddings",
+        embedding_dim: Optional[int] = 512,
+        relative_pose: Optional[bool] = False,
+        **kwargs,
+    ):
+        self.input_folder = os.path.join(basedir, sequence)
+        # self.pose_path = os.path.join(self.input_folder,"camera_parameter", "camera_parameter_"+ sequence + ".conf")
+        self.pose_path = os.path.join(self.input_folder,"camera_parameter", "camera_parameter" + ".conf")
+        
+        if trajectory_all:
+            self.trajectory = self.get_trajectory()
+        else:
+            self.trajectory = trajectory
+        
+        super().__init__(
+            config_dict,
+            stride=stride,
+            start=start,
+            end=end,
+            desired_height=desired_height,
+            desired_width=desired_width,
+            load_embeddings=load_embeddings,
+            embedding_dir=embedding_dir,
+            embedding_dim=embedding_dim,
+            relative_pose=relative_pose,
+            **kwargs,
+        )
+        
+    def get_trajectory(self):
+        config = configparser.ConfigParser()
+        config.read(self.pose_path)
+        trajectory = []
+        for sec_idx in config.sections():
+            trajectory.append(sec_idx)
+        return trajectory
+
+    def get_filepaths(self):
+        color_paths = []
+        depth_paths = []
+        config = configparser.ConfigParser()
+        config.read(self.pose_path)
+            
+        for sec_idx in self.trajectory:
+            rgb_names = config.get(sec_idx, 'rgb_name').strip('[]').replace("'", "").split(', ')
+            depth_names = config.get(sec_idx, 'depth_name').strip('[]').replace("'", "").split(', ')
+            
+            for rgb_name, depth_name in zip(rgb_names, depth_names):
+                color_paths.append(os.path.join(self.input_folder, "color_image", rgb_name))
+                depth_paths.append(os.path.join(self.input_folder, "depth_image", depth_name))
+
+        embedding_paths = []
+        return color_paths, depth_paths, embedding_paths
+
+    def load_poses(self):
+        
+        ## First get lpose, it is the laser pose in the world frame
+        ## We need to convert it to the camera pose in the world frame.
+        ## First we need to convert the laser pose to gimbal pose, the camera is on the gimbal
+        ## Then we need to convert the gimbal pose to the camera pose. We need use the heading value to rotate the camera pose.
+        ## We have G2L_TRANSFORM, and C2G_TRANSFORM, we can use them to convert the laser pose to the camera pose.
+        
+        poses = []
+        config = configparser.ConfigParser()
+        config.read(self.pose_path)
+
+        for sec_idx in self.trajectory:
+            data = config.get(sec_idx, 'lpose')
+            # Define array in the local scope
+            local_scope = {'array': np.array}
+            # Evaluate the string representation of the arrays
+            arrays = eval(data, {"__builtins__": None}, local_scope)
+            
+            for array in arrays:
+                T_l2w = array
+                T_l2c = L2C_TRANSFORM
+                T_c2w = np.dot(T_l2w, np.linalg.inv(T_l2c))
+                poses.append(torch.tensor(T_c2w))
+
+        return poses
+
+
+
+
 def calculate_T_g2c(T_g2c_initial, angle):
 
     # Extract rotation and translation from the initial T_g2c
@@ -475,6 +576,41 @@ class Reconstruction(object):
         
         print("We have reconstructed the objects!!!!!!!!")
 
+    def reconstruction_path(self, dataset_name="test_1", _start=0, _end=-1, _stride=None):
+        
+        all_objs = MapObjectList()
+    
+        dataset = PathReconstructionDataset(
+            config_dict=self.config_dict.dataset_config,
+            basedir="/home/lg1/peteryu_workspace/m2g_concept_graph/dataset/slam/path",
+            sequence=dataset_name,
+            trajectory=[],
+            trajectory_all=True,
+            desired_height=224,
+            desired_width=224,
+            start=_start,
+            stride=_stride,
+            end=_end
+        )
+    
+        detection_list, classes_list = self.obj_feature_generator.obj_feature_generate(dataset)
+        
+        fg_detections_list, bg_detections_list = self.obj_feature_generator.process_detections_for_merge(
+                    detection_list, 
+                    classes_list, 
+                    dataset,
+                    )
+        
+        vp_000 = np.array([0, 0, 0])
+        vp_list = [vp_000]
+        
+        _cur_surround_objs = MapObjectList()
+        _cur_surround_objs = self.obj_feature_generator.detections_to_objs(_cur_surround_objs, fg_detections_list, bg_detections_list, self.config_dict.merge_config)
+        all_objs = self.obj_feature_generator.merge_objs_objs(
+            all_objs, _cur_surround_objs[0], self.config_dict.merge_config, vp_path_list=vp_list, pcd_save_path=dataset_name)
+        
+        print("We have reconstructed the objects!!!!!!!!")
+
 if __name__ == "__main__":
     reconstruction = Reconstruction()
     # reconstruction.reconstruction("1101_test_1_1")
@@ -485,5 +621,6 @@ if __name__ == "__main__":
     # reconstruction.reconstruction("1101_test_3_2_cut")
     
     # ### Gimbal
-    reconstruction.reconstruction_gimbal("test_1210_1", _start=0, _end=-1)
+    # reconstruction.reconstruction_gimbal("test_1210_1", _start=0, _end=-1)
+    reconstruction.reconstruction_path('test_1210_1', _start=0, _end=200, _stride=5)
         
