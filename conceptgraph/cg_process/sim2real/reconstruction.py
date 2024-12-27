@@ -320,7 +320,7 @@ class GimbalReconstructionDataset(GradSLAMDataset):
                 T_g2l = G2L_TRANSFORM    # Gimbal to laser transformation
                 T_g2w = np.dot(T_l2w, np.linalg.inv(T_g2l))  # Gimbal to world transformation
                 
-                _T_g2c = np.linalg.inv(C2G_TRANSFORM)  # Initial gimbal to camera transformation
+                _T_g2c = C2G_TRANSFORM  # Initial gimbal to camera transformation
                 T_g2c = calculate_T_g2c(_T_g2c, angle)  # Final gimbal to camera transformation with heading
                 
                 T_c2w = np.dot(T_g2w, np.linalg.inv(T_g2c))  # Camera to world transformation
@@ -329,39 +329,72 @@ class GimbalReconstructionDataset(GradSLAMDataset):
 
         return poses
 
-def calculate_T_g2c(T_g2c_initial, heading):
-    """
-    Calculate the final transformation matrix T_g2c using an initial T_g2c and heading.
+def calculate_T_g2c(T_g2c_initial, angle):
 
-    Args:
-        T_g2c_initial (np.ndarray): The initial gimbal to camera transformation matrix (4x4).
-        heading (float): The heading angle in radians.
-
-    Returns:
-        np.ndarray: The final transformation matrix T_g2c (4x4).
-    """
-    
     # Extract rotation and translation from the initial T_g2c
     R_g2c_initial = T_g2c_initial[:3, :3]
     t_g2c_initial = T_g2c_initial[:3, 3]
 
-    # Calculate the heading rotation matrix (counterclockwise rotation around Z-axis)
-    R_heading = np.array([
-        [np.cos(heading), -np.sin(heading), 0],
-        [np.sin(heading), np.cos(heading), 0],
-        [0, 0, 1]
+    # Calculate the rotation matrices
+    R_m = np.array([
+        [np.cos(angle), 0, -np.sin(angle)],
+        [0, 1, 0],
+        [np.sin(angle), 0, np.cos(angle)]
     ])
 
-    # Combine the heading rotation with the initial gimbal to camera rotation
-    R_g2c_final = R_heading @ R_g2c_initial
-    t_g2c_final = t_g2c_initial  # Translation remains the same
+    # Combine the rotations with the initial gimbal to camera rotation
+    R_g2c = R_m @ R_g2c_initial
 
-    # Construct the final transformation matrix T_g2c
-    T_g2c_final = np.eye(4)
-    T_g2c_final[:3, :3] = R_g2c_final
-    T_g2c_final[:3, 3] = t_g2c_final
+    # Construct the final transformation matrices T_g2c
+    T_g2c = np.eye(4)
+    T_g2c[:3, :3] = R_g2c
+    T_g2c[:3, 3] = t_g2c_initial
 
-    return T_g2c_final
+    return T_g2c
+
+def rotation_matrix_x(angle):
+    """
+    Create a rotation matrix for a counterclockwise rotation around the X-axis.
+
+    Args:
+        angle (float): The rotation angle in radians.
+
+    Returns:
+        np.ndarray: The rotation matrix (3x3).
+    """
+    return np.array([
+        [1, 0, 0],
+        [0, np.cos(angle), -np.sin(angle)],
+        [0, np.sin(angle), np.cos(angle)]
+    ])
+
+def rotation_matrix_y(angle):
+    """
+    Create a rotation matrix for a clockwise rotation around the Y-axis.
+
+    Args:
+        angle (float): The rotation angle in radians.
+
+    Returns:
+        np.ndarray: The rotation matrix (3x3).
+    """
+    return 
+
+def rotation_matrix_z(angle):
+    """
+    Create a rotation matrix for a counterclockwise rotation around the Z-axis.
+
+    Args:
+        angle (float): The rotation angle in radians.
+
+    Returns:
+        np.ndarray: The rotation matrix (3x3).
+    """
+    return np.array([
+        [np.cos(angle), -np.sin(angle), 0],
+        [np.sin(angle), np.cos(angle), 0],
+        [0, 0, 1]
+    ])
 
 
     
@@ -495,5 +528,5 @@ if __name__ == "__main__":
     # reconstruction.reconstruction("1101_test_3_2_cut")
     
     # ### Gimbal
-    reconstruction.reconstruction_gimbal("test_1210_1")
+    reconstruction.reconstruction_gimbal("test_1210_1", _start=0, _end=-1)
         
