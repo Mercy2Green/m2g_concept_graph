@@ -329,8 +329,6 @@ class GimbalReconstructionDataset(GradSLAMDataset):
 
         return poses
 
-
-
  
 class PathReconstructionDataset(GradSLAMDataset):
     
@@ -495,13 +493,13 @@ class Reconstruction(object):
             )
         self.obj_feature_generator.init_model()
         
-    def reconstruction(self, dataset_name="test_1", _start=0, _end=-1, _stride=None):
+    def reconstruction(self, dataset_name="test_1", _start=0, _end=-1, _stride=None, _basedir="/home/lg1/peteryu_workspace/m2g_concept_graph/dataset/1101_dataset/loop/"):
         
         all_objs = MapObjectList()
         
         dataset = ReconstructionDataset(
             config_dict=self.config_dict.dataset_config,
-            basedir="/home/lg1/peteryu_workspace/m2g_concept_graph/dataset/1101_dataset/loop/",
+            basedir=_basedir,
             sequence=dataset_name,
             desired_height=224,
             desired_width=224,
@@ -528,7 +526,7 @@ class Reconstruction(object):
         
         print("We have reconstructed the objects!!!!!!!!")
         
-    def reconstruction_gimbal(self, dataset_name="test_1", _start=0, _end=-1, _stride=None):
+    def reconstruction_gimbal(self, dataset_name="test_1", _start=0, _end=-1, _stride=None, _basedir="/home/lg1/peteryu_workspace/m2g_concept_graph/dataset/slam/gimbal"):
         
         all_objs = MapObjectList()
         
@@ -547,7 +545,7 @@ class Reconstruction(object):
         
         dataset = GimbalReconstructionDataset(
             config_dict=self.config_dict.dataset_config,
-            basedir="/home/lg1/peteryu_workspace/m2g_concept_graph/dataset/slam/gimbal",
+            basedir=_basedir,
             sequence=dataset_name,
             trajectory=[],
             trajectory_all=True,
@@ -566,8 +564,14 @@ class Reconstruction(object):
                     dataset,
                     )
         
-        vp_000 = np.array([0, 0, 0])
-        vp_list = [vp_000]
+        ## Every 12 frames, we have a vp, we need the pose of the vp, and get the xyz of the vp
+        ## dataset can return the pose of the vp, we can use it to get the xyz of the vp
+        poses = dataset.load_poses()
+        vp_list = []
+        for _pose in poses[::12]:
+            vp_list.append(_pose[:3, 3].numpy())
+        # vp_000 = np.array([0, 0, 0])
+        # vp_list = [vp_000]
         
         _cur_surround_objs = MapObjectList()
         _cur_surround_objs = self.obj_feature_generator.detections_to_objs(_cur_surround_objs, fg_detections_list, bg_detections_list, self.config_dict.merge_config)
@@ -576,13 +580,13 @@ class Reconstruction(object):
         
         print("We have reconstructed the objects!!!!!!!!")
 
-    def reconstruction_path(self, dataset_name="test_1", _start=0, _end=-1, _stride=None):
+    def reconstruction_path(self, dataset_name="test_1", _start=0, _end=-1, _stride=None, _basedir="/home/lg1/peteryu_workspace/m2g_concept_graph/dataset/vln_slam/path"):
         
         all_objs = MapObjectList()
     
         dataset = PathReconstructionDataset(
             config_dict=self.config_dict.dataset_config,
-            basedir="/home/lg1/peteryu_workspace/m2g_concept_graph/dataset/slam/path",
+            basedir=_basedir,
             sequence=dataset_name,
             trajectory=[],
             trajectory_all=True,
@@ -622,5 +626,12 @@ if __name__ == "__main__":
     
     # ### Gimbal
     # reconstruction.reconstruction_gimbal("test_1210_1", _start=0, _end=-1)
-    reconstruction.reconstruction_path('test_1210_1', _start=0, _end=200, _stride=5)
+    reconstruction.reconstruction_gimbal("test_122_5", _start=0, _end=-1, _basedir="/home/lg1/peteryu_workspace/m2g_concept_graph/dataset/vln_slam/gimbal")
+    
+    # task_list = ["test_12_2", "test_12_6","test_122_2", "test_122_5"]
+    # for task in task_list:
+    #     reconstruction.reconstruction_gimbal(task, _start=0, _end=-1, _basedir="/home/lg1/peteryu_workspace/m2g_concept_graph/dataset/vln_slam/gimbal")
+    
+    # ### Path
+    # reconstruction.reconstruction_path('test_1210_1', _start=0, _end=200, _stride=5)
         
