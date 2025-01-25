@@ -578,6 +578,9 @@ class Reconstruction(object):
         all_objs = self.obj_feature_generator.merge_objs_objs(
             all_objs, _cur_surround_objs[0], self.config_dict.merge_config, vp_path_list=vp_list, pcd_save_path=dataset_name)
         
+                
+        cur_edges, _ = self.obj_edge_processor.generate_object_edges_by_rules(objs = all_objs, cfg = self.config_dict.edge_config, relation_save_suffix=dataset_name)
+        
         print("We have reconstructed the objects!!!!!!!!")
 
     def reconstruction_path(self, dataset_name="test_1", _start=0, _end=-1, _stride=None, _basedir="/home/lg1/peteryu_workspace/m2g_concept_graph/dataset/vln_slam/path"):
@@ -612,6 +615,7 @@ class Reconstruction(object):
         _cur_surround_objs = self.obj_feature_generator.detections_to_objs(_cur_surround_objs, fg_detections_list, bg_detections_list, self.config_dict.merge_config)
         all_objs = self.obj_feature_generator.merge_objs_objs(
             all_objs, _cur_surround_objs[0], self.config_dict.merge_config, vp_path_list=vp_list, pcd_save_path=dataset_name)
+
         
         print("We have reconstructed the objects!!!!!!!!")
 
@@ -626,11 +630,11 @@ if __name__ == "__main__":
     
     # ### Gimbal
     # reconstruction.reconstruction_gimbal("test_1210_1", _start=0, _end=-1)
-    reconstruction.reconstruction_gimbal("test_122_5", _start=0, _end=-1, _basedir="/home/lg1/peteryu_workspace/m2g_concept_graph/dataset/vln_slam/gimbal")
+    # reconstruction.reconstruction_gimbal("test_12_6", _start=0, _end=-1, _basedir="/home/lg1/peteryu_workspace/m2g_concept_graph/dataset/vln_slam/gimbal")
     
-    # task_list = ["test_12_2", "test_12_6","test_122_2", "test_122_5"]
-    # for task in task_list:
-    #     reconstruction.reconstruction_gimbal(task, _start=0, _end=-1, _basedir="/home/lg1/peteryu_workspace/m2g_concept_graph/dataset/vln_slam/gimbal")
+    task_list = ["test_12_2", "test_12_6","test_122_2", "test_122_5"]
+    for task in task_list:
+        reconstruction.reconstruction_gimbal(task, _start=0, _end=-1, _basedir="/home/lg1/peteryu_workspace/m2g_concept_graph/dataset/vln_slam/gimbal")
     
     # ### Path
     # reconstruction.reconstruction_path('test_1210_1', _start=0, _end=200, _stride=5)

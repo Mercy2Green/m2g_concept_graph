@@ -114,7 +114,8 @@ def main(args):
             edges = json.load(f)
         
         classes = objects.get_most_common_class()
-        colors = [class_colors[str(c)] for c in classes]
+        default_color = [0, 0, 0]  # Define a default color (e.g., black)
+        colors = [class_colors.get(str(c), default_color) for c in classes]
         obj_centers = []
         for obj, c in zip(objects, colors):
             pcd = obj['pcd']
@@ -125,6 +126,9 @@ def main(args):
             extent = np.linalg.norm(extent)
             # radius = extent ** 0.5 / 25
             radius = 0.10
+            
+            # center = center + np.array([0, -12, 0])
+            
             obj_centers.append(center)
 
             # remove the nodes on the ceiling, for better visualization
@@ -137,12 +141,20 @@ def main(args):
             id1 = edge["object1"]['id']
             id2 = edge["object2"]['id']
 
-            line_mesh = LineMesh(
-                points = np.array([obj_centers[id1], obj_centers[id2]]),
-                lines = np.array([[0, 1]]),
-                colors = [1, 0, 0],
-                radius=0.02
-            )
+            if edge['object_relation'] == "a on b" or edge['object_relation'] == "b on a":
+                line_mesh = LineMesh(
+                    points = np.array([obj_centers[id1], obj_centers[id2]]),
+                    lines = np.array([[0, 1]]),
+                    colors = [1, 0, 0],
+                    radius=0.02
+                )
+            if edge['object_relation'] == "a in b" or edge['object_relation'] == "b in a":
+                line_mesh = LineMesh(
+                    points = np.array([obj_centers[id1], obj_centers[id2]]),
+                    lines = np.array([[0, 1]]),
+                    colors = [0, 1, 0],
+                    radius=0.02
+                )
 
             scene_graph_geometries.extend(line_mesh.cylinder_segments)
     
@@ -158,18 +170,19 @@ def main(args):
     if bg_objects is not None:
         indices_bg = np.arange(len(objects), len(objects) + len(bg_objects))
         objects.extend(bg_objects)
-    
-    # calculate all objects center positions
-    # remove the object from objects if their center y value is the minimum
-    print(f"Before removing the ceiling objects, there are {len(objects)} objects.")
-    new_objects_list = []
-    # create a list to order the objects based on the y value from smallest to largest
-    y_axis_list = []
-    y_axis_list = sorted(objects, key=lambda x: np.mean(np.asarray(x['pcd'].points), axis=0)[1])
-    new_objects_list = y_axis_list[20:]
-    objects = MapObjectList()
-    objects.extend(new_objects_list)
-    print(f"After removing the ceiling objects, there are {len(objects)} objects.")
+        
+    #### ALEX add    
+    # # calculate all objects center positions
+    # # remove the object from objects if their center y value is the minimum
+    # print(f"Before removing the ceiling objects, there are {len(objects)} objects.")
+    # new_objects_list = []
+    # # create a list to order the objects based on the y value from smallest to largest
+    # y_axis_list = []
+    # y_axis_list = sorted(objects, key=lambda x: np.mean(np.asarray(x['pcd'].points), axis=0)[1])
+    # new_objects_list = y_axis_list[20:]
+    # objects = MapObjectList()
+    # objects.extend(new_objects_list)
+    # print(f"After removing the ceiling objects, there are {len(objects)} objects.")
         
         
     # Sub-sample the point cloud for better interactive experience
@@ -203,19 +216,50 @@ def main(args):
     # Add geometry to the scene
     # for geometry in pcds + bboxes:
     #     vis.add_geometry(geometry)
-
-    # I don't want to use the bboxes
+        
     for geometry in pcds:
         vis.add_geometry(geometry)
         
-    # visualize the viewpoints
+    # # visualize the viewpoints
+    # if viewpoints is not None:
+    #     for vp in viewpoints:
+    #         # Create a coordinate frame at the viewpoint position
+    #         coord_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.5)
+    #         # Translate the coordinate frame vertically by 5 meters
+    #         coord_frame.translate(vp)
+    #         vis.add_geometry(coord_frame)
+            
     if viewpoints is not None:
+        vp_path = []
+    # Create lines between consecutive viewpoints
+        points = []
+        lines = []
+        for i in range(len(viewpoints) - 1):
+            points.extend([viewpoints[i], viewpoints[i + 1]])
+            lines.append([2 * i, 2 * i + 1])
+
+        # Add path lines
+        line_mesh = LineMesh(
+            points=np.array(points),
+            lines=np.array(lines),
+            colors=[1, 0, 0],  # Red color
+            radius=0.02
+        )
+        
+        vp_path.extend(line_mesh.cylinder_segments)
+
+        # Add Spere at viewpoints
         for vp in viewpoints:
-            # Create a coordinate frame at the viewpoint position
-            coord_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=9.0)
-            # Translate the coordinate frame vertically by 5 meters
-            coord_frame.translate(vp)
-            vis.add_geometry(coord_frame)
+            _vp = o3d.geometry.TriangleMesh.create_sphere(radius=0.2)
+            if np.array_equal(vp, viewpoints[0]):
+                _vp.paint_uniform_color([1, 0, 0.1])
+            elif np.array_equal(vp, viewpoints[-1]):
+                _vp.paint_uniform_color([0.1, 0, 1])
+            else:
+                _vp.paint_uniform_color([0.2, 0.5, 0])
+            _vp.translate(vp)
+            vp_path.append(_vp)
+        
         
     main.show_bg_pcd = True
     def toggle_bg_pcd(vis):
@@ -260,6 +304,20 @@ def main(args):
                 vis.add_geometry(geometry, reset_bounding_box=False)
         
         main.show_scene_graph = not main.show_scene_graph
+        
+    main.show_vp_path = False 
+    def toggle_vp_path(vis):
+        if viewpoints is None:
+            print("No viewpoints found.")
+            return
+        if main.show_vp_path:
+            for i in vp_path:
+                vis.remove_geometry(i, reset_bounding_box=False)
+        else:
+            for i in vp_path:
+                vis.add_geometry(i, reset_bounding_box=False)
+        
+        main.show_vp_path = not main.show_vp_path
         
     def color_by_class(vis):
         for i in range(len(objects)):
@@ -352,6 +410,7 @@ def main(args):
     vis.register_key_callback(ord("I"), color_by_instance)
     vis.register_key_callback(ord("V"), save_view_params)
     vis.register_key_callback(ord("G"), toggle_scene_graph)
+    vis.register_key_callback(ord("P"), toggle_vp_path)
     
     # Render the scene
     vis.run()
