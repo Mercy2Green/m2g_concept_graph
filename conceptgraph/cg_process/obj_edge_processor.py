@@ -637,7 +637,7 @@ class ObjEdgeProcessor():
         
         return encoded_relationship
 
-    def generate_object_edges_by_rules(self, objs, cfg, relation_save_suffix = None):
+    def generate_object_edges_by_rules(self, objs, cfg, relation_save_suffix = None, merge_cfg = None):
         from conceptgraph.slam.slam_classes import MapObjectList
         from conceptgraph.slam.utils import compute_overlap_matrix
         import gc
@@ -805,7 +805,7 @@ class ObjEdgeProcessor():
             if relation_save_suffix is not None:
                 print("Saving object relations to file...")
                 os.makedirs(Path(args.cachedir) / "edge_saves", exist_ok=True)
-                with open(Path(args.cachedir) / "edge_saves" / f"cfslam_object_relations_{relation_save_suffix}.json", "w") as f:
+                with open(Path(args.cachedir) / "edge_saves" / f"cfslam_object_relations_{relation_save_suffix}_d{merge_cfg.obj_min_detections}.json", "w") as f:
                     json.dump(relations, f, indent=4)
                     
             # if pcd_save_path == None:

@@ -114,7 +114,7 @@ def main(args):
             edges = json.load(f)
         
         classes = objects.get_most_common_class()
-        default_color = [0, 0, 0]  # Define a default color (e.g., black)
+        default_color = [0.5, 0.5, 0.5]  # Define a default color (e.g., black)
         colors = [class_colors.get(str(c), default_color) for c in classes]
         obj_centers = []
         for obj, c in zip(objects, colors):
@@ -171,7 +171,7 @@ def main(args):
         indices_bg = np.arange(len(objects), len(objects) + len(bg_objects))
         objects.extend(bg_objects)
         
-    #### ALEX add    
+    # #### ALEX add    
     # # calculate all objects center positions
     # # remove the object from objects if their center y value is the minimum
     # print(f"Before removing the ceiling objects, there are {len(objects)} objects.")
@@ -179,7 +179,7 @@ def main(args):
     # # create a list to order the objects based on the y value from smallest to largest
     # y_axis_list = []
     # y_axis_list = sorted(objects, key=lambda x: np.mean(np.asarray(x['pcd'].points), axis=0)[1])
-    # new_objects_list = y_axis_list[20:]
+    # new_objects_list = y_axis_list[12:]
     # objects = MapObjectList()
     # objects.extend(new_objects_list)
     # print(f"After removing the ceiling objects, there are {len(objects)} objects.")
@@ -320,12 +320,14 @@ def main(args):
         main.show_vp_path = not main.show_vp_path
         
     def color_by_class(vis):
+        default_color = [0.5, 0.5, 0.5]  # Default color (gray)
         for i in range(len(objects)):
             pcd = pcds[i]
             obj_class = object_classes[i]
+            color = class_colors.get(str(obj_class), default_color)  # Use default color if class not found
             pcd.colors = o3d.utility.Vector3dVector(
                 np.tile(
-                    class_colors[str(obj_class)],
+                    color,
                     (len(pcd.points), 1)
                 )
             )
